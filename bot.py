@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import telebot
 from telebot import types
 from flask import Flask, request
+import yt_dlp
 
 TOKEN = '8978486498:AAGjeMhm0f6BMjVX2JA7LbrN4Bcv6M_LET8'
 bot = telebot.TeleBot(TOKEN)
@@ -19,16 +20,23 @@ INSTA = 'https://www.instagram.com/forexin.turkaslani'
 YOUTUBE = 'https://www.youtube.com/@Forexin.turkaslani'
 QUIZ = SITE + 'quiz.html'
 DATA_FILE = os.path.join(os.path.expanduser('~'), 'trades.json')
+ADMIN_FILE = os.path.join(os.path.expanduser('~'), 'admin.json')
+DL_DIR = os.path.join(os.path.expanduser('~'), 'dl')
+os.makedirs(DL_DIR, exist_ok=True)
 
 ADMIN = None
+try:
+    with open(ADMIN_FILE) as f:
+        ADMIN = json.load(f)['id']
+except Exception:
+    pass
+
 USERS = set()
 state = {}
 used_codes = set()
-allowed_groups = set()
 
-# بارگذاری داده‌ها
 try:
-    with open(DATA_FILE, 'r') as f:
+    with open(DATA_FILE) as f:
         TRADES = json.load(f)
 except Exception:
     TRADES = []
@@ -39,6 +47,18 @@ def save_trades():
             json.dump(TRADES, f)
     except Exception:
         pass
+
+def ensure_admin(uid):
+    global ADMIN
+    if ADMIN is None:
+        ADMIN = uid
+        try:
+            with open(ADMIN_FILE, 'w') as f:
+                json.dump({'id': uid}, f)
+        except Exception:
+            pass
+        return True
+    return uid == ADMIN
 
 SESS = [('سیدنی',0,30),('توکیو',3,30),('لندن',10,30),('نیویورک',15,30)]
 
@@ -123,15 +143,15 @@ FAQ = [
 WELCOME = '''سلام {first} عزیز! 🌟
 به «LIT Community Forexin_Turkaslani» خوش آمدید.
 
-به جمع تریدرهای حرفه‌ای و خانواده فارکسین ترک اصلانی خوش آمدید. برای اینکه بهترین تجربه را داشته باشید، کانال‌های ما به شرح زیر دسته‌بندی شده‌اند:
+به جمع تریدرهای حرفه‌ای و خانواده فارکسین ترک اصلانی خوش آمدید. کانال‌های ما:
 
 1️⃣ 📣 کانال سیگنال و لایو (رایگان)
 @forexin_turkaslanifree
-✅ تحلیل‌های لحظه‌ای، اطلاع‌رسانی لایوها و نکات میلی‌متری
+✅ تحلیل‌های لحظه‌ای و نکات میلی‌متری
 
 2️⃣ 🎓 کانال بیس و آموزش آکادمی
 @Forexin_Turkaslani_Base
-✅ اصول استراتژی LIT، مدیریت سرمایه و ترید مایکرو
+✅ اصول استراتژی LIT و مدیریت سرمایه
 
 3️⃣ 💬 همین گروه (LIT Community)
 @forexinturkaslanilitcommuniti
@@ -177,6 +197,27 @@ def gold_price():
     except Exception:
         return None
 
+def handle_link(m, url):
+    wait = bot.send_message(m.chat.id, '⏳ در حال دانلود... صبر کن!')
+    def work():
+        try:
+            opts = {'outtmpl': os.path.join(DL_DIR, '%(id)s.%(ext)s'), 'format': 'best', 'quiet': True, 'no_warnings': True}
+            with yt_dlp.YoutubeDL(opts) as y:
+                info = y.extract_info(url, download=True)
+                fn = y.prepare_filename(info)
+            size = os.path.getsize(fn)
+            if size > 49*1024*1024:
+                bot.send_message(m.chat.id, '⚠️ فایل بزرگ‌تر از ۵۰MB است.')
+            else:
+                with open(fn, 'rb') as f:
+                    bot.send_video(m.chat.id, f, caption='🎬 ' + (info.get('title') or '') + '\n🤖 Forexin Site Bot')
+            try: os.remove(fn)
+            except Exception: pass
+            bot.delete_message(m.chat.id, wait.message_id)
+        except Exception as e:
+            bot.send_message(m.chat.id, '⚠️ دانلود نشد: ' + str(e)[:150])
+    threading.Thread(target=work, daemon=True).start()
+
 def report(trades, title):
     if not trades:
         return '📊 ' + title + '\n\n❌ معامله‌ای ثبت نشده.'
@@ -187,13 +228,7 @@ def report(trades, title):
     avg_rr = round(sum(rrs)/len(rrs), 2) if rrs else 0
     closed = len(wins) + len(losses)
     wr = round(len(wins)/closed*100, 1) if closed > 0 else 0
-    return '📊 ' + title + '\n\n' + \
-           '📈 تعداد معاملات: ' + str(len(trades)) + '\n' + \
-           '✅ برنده: ' + str(len(wins)) + '\n' + \
-           '❌ بازنده: ' + str(len(losses)) + '\n' + \
-           '⏳ باز: ' + str(len(openn)) + '\n' + \
-           '🎯 Win Rate: ' + str(wr) + '٪\n' + \
-           '💎 میانگین R:R: ' + str(avg_rr)
+    return '📊 ' + title + '\n\n📈 تعداد: ' + str(len(trades)) + '\n✅ برنده: ' + str(len(wins)) + '\n❌ بازنده: ' + str(len(losses)) + '\n⏳ باز: ' + str(len(openn)) + '\n🎯 Win Rate: ' + str(wr) + '٪\n💎 میانگین R:R: ' + str(avg_rr)
 
 def today():
     tz = timezone(timedelta(hours=3, minutes=30))
@@ -213,16 +248,14 @@ def is_link(txt):
 
 @bot.message_handler(commands=['start'])
 def start(m):
-    global ADMIN
     uid = m.from_user.id
     if m.chat.type in ('group', 'supergroup'):
-        allowed_groups.add(m.chat.id)
         bot.send_message(m.chat.id, WELCOME.format(first=m.from_user.first_name or 'دوست عزیز'), reply_markup=group_menu())
         return
     args = m.text.split()
     if ADMIN is None:
-        ADMIN = uid
-        bot.send_message(uid, '🛠️ ادمین ربات شدید!\n\n📊 دستورالعمل:\n/trade ورود استاپ تارگت — ثبت معامله\n/win شماره — بستن معامله با برد\n/loss شماره — بستن با باخت\n/report — گزارش امروز\n/report week — هفته\n/report month — ماه\n/stats — آمار کل\n📢 /post متن — پست در کانال\n👥 /broadcast متن — پیام همگانی')
+        ensure_admin(uid)
+        bot.send_message(uid, '🛠️ ادمین ربات شدید!\n\n📊 /trade ورود استاپ تارگت\n✅ /win شماره | ❌ /loss شماره\n📈 /report | week | month\n🏆 /stats\n📢 /post متن | 👥 /broadcast متن')
         return
     USERS.add(uid)
     if len(args) > 1:
@@ -235,7 +268,7 @@ def start(m):
                 bot.send_message(uid, '⚠️ این کد قبلاً استفاده شده.')
             else:
                 state[uid] = {'step':'name','code':a}
-                bot.send_message(uid, '🎟️ کدت ثبت شد!\nنام و نام خانوادگی‌ات را بنویس:')
+                bot.send_message(uid, '🎟️ کدت ثبت شد!\nنام و نام خانوادگی:')
             return
     bot.send_message(uid, 'سلام ' + (m.from_user.first_name or 'دوست عزیز') + '! 🌟\nدستیار فارکسین:\n📊 ثبت معامله | 💰 طلا | 🎬 دانلود\n👇 چه کمکی کنم؟', reply_markup=menu())
 
@@ -247,6 +280,24 @@ def new_member(m):
                 bot.send_message(m.chat.id, WELCOME.format(first=u.first_name or 'دوست عزیز'), reply_markup=group_menu())
             except Exception:
                 pass
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith(('w','l')) and c.data[1:].isdigit())
+def trade_result(c):
+    if not ensure_admin(c.from_user.id):
+        bot.answer_callback_query(c.id, 'فقط ادمین'); return
+    tid = int(c.data[1:])
+    for t in TRADES:
+        if t['id'] == tid:
+            t['result'] = 'win' if c.data.startswith('w') else 'loss'
+            save_trades()
+            txt = '✅ برنده!' if t['result']=='win' else '❌ بازنده!'
+            try:
+                bot.edit_message_text(c.message.text + '\n\n🏁 نتیجه: ' + txt, c.message.chat.id, c.message.message_id)
+            except Exception:
+                pass
+            bot.answer_callback_query(c.id, txt)
+            return
+    bot.answer_callback_query(c.id, 'پیدا نشد')
 
 @bot.callback_query_handler(func=lambda c: True)
 def cb(c):
@@ -272,7 +323,7 @@ def cb(c):
         if p: bot.send_message(uid, '💰 طلا (XAU/USD): $' + str(p))
         else: bot.send_message(uid, '⚠️ قیمت در دسترس نیست.')
     elif c.data == 'dl':
-        bot.send_message(uid, '🎬 لینک یوتیوب / اینستا / تیک‌تاک را بفرست!')
+        bot.send_message(uid, '🎬 لینک یوتیوب / اینستا / تیک‌تاک را همین‌جا بفرست!')
     elif c.data == 'tr':
         bot.send_message(uid, '📊 فرمت:\n/trade ورود استاپ تارگت\n\nمثال: /trade 2345.50 2340.00 2360.00')
     elif c.data == 'rp':
@@ -284,7 +335,7 @@ def cb(c):
 
 @bot.message_handler(commands=['trade'])
 def trade_cmd(m):
-    if m.from_user.id != ADMIN:
+    if not ensure_admin(m.from_user.id):
         bot.reply_to(m, '⚠️ فقط ادمین می‌تواند معامله ثبت کند.')
         return
     parts = m.text.split()
@@ -305,46 +356,31 @@ def trade_cmd(m):
            types.InlineKeyboardButton('❌ بازنده (SL)', callback_data='l'+str(tid)))
     bot.reply_to(m, '📊 معامله #'+str(tid)+' ثبت شد!\n\n'+direction+'\n🎯 ورود: '+str(entry)+'\n🛡️ استاپ: '+str(stop)+'\n🏆 تارگت: '+str(target)+'\n⚖️ ریسک: '+str(round(risk,4))+'\n💰 ریوارد: '+str(round(reward,4))+'\n💎 R:R = '+str(rr), reply_markup=mk)
 
-@bot.callback_query_handler(func=lambda c: c.data.startswith(('w','l')) and c.data[1:].isdigit())
-def trade_result(c):
-    if c.from_user.id != ADMIN:
-        bot.answer_callback_query(c.id, 'فقط ادمین'); return
-    tid = int(c.data[1:])
-    for t in TRADES:
-        if t['id'] == tid:
-            t['result'] = 'win' if c.data.startswith('w') else 'loss'
-            save_trades()
-            txt = '✅ برنده!' if t['result']=='win' else '❌ بازنده!'
-            bot.edit_message_text(c.message.text + '\n\n🏁 نتیجه: ' + txt, c.message.chat.id, c.message.message_id)
-            bot.answer_callback_query(c.id, txt)
-            return
-    bot.answer_callback_query(c.id, 'معامله پیدا نشد')
-
 @bot.message_handler(commands=['win'])
 def win_cmd(m):
-    if m.from_user.id != ADMIN: return
+    if not ensure_admin(m.from_user.id): return
     try:
         tid = int(m.text.split()[1])
         for t in TRADES:
             if t['id'] == tid and t['result'] is None:
                 t['result'] = 'win'; save_trades()
-                bot.reply_to(m, '✅ معامله #'+str(tid)+' برنده ثبت شد!')
+                bot.reply_to(m, '✅ معامله #'+str(tid)+' برنده شد!')
                 return
-        bot.reply_to(m, '⚠️ معامله پیدا نشد یا قبلاً بسته شده.')
+        bot.reply_to(m, '⚠️ پیدا نشد یا قبلاً بسته شده.')
     except Exception:
         bot.reply_to(m, '📊 روش: /win شماره')
 
 @bot.message_handler(commands=['loss'])
 def loss_cmd(m):
-    if m.from_user.id != ADMIN: return
+    if not ensure_admin(m.from_user.id): return
     try:
         tid = int(m.text.split()[1])
         for t in TRADES:
             if t['id'] == tid and t['result'] is None:
                 t['result'] = 'loss'; save_trades()
-                bot.reply_to(m, '❌ معامله #'+str(tid)+' بازنده ثبت شد.')
+                bot.reply_to(m, '❌ معامله #'+str(tid)+' بازنده شد.')
                 return
-        bot.reply_to(m, '⚠️ معامله پیدا نشد یا قبلاً بسته شده.')
+        bot.reply_to(m, '⚠️ پیدا نشد یا قبلاً بسته شده.')
     except Exception:
         bot.reply_to(m, '📊 روش: /loss شماره')
 
@@ -352,17 +388,11 @@ def loss_cmd(m):
 def report_cmd(m):
     parts = m.text.split()
     if len(parts) > 1 and parts[1] == 'week':
-        ws = week_start()
-        tr = [t for t in TRADES if t['date'] >= ws]
-        bot.reply_to(m, report(tr, 'گزارش هفته (از '+ws+')'))
+        bot.reply_to(m, report([t for t in TRADES if t['date'] >= week_start()], 'گزارش هفته'))
     elif len(parts) > 1 and parts[1] == 'month':
-        ms = month_start()
-        tr = [t for t in TRADES if t['date'] >= ms]
-        bot.reply_to(m, report(tr, 'گزارش ماه (از '+ms+')'))
+        bot.reply_to(m, report([t for t in TRADES if t['date'] >= month_start()], 'گزارش ماه'))
     else:
-        td = today()
-        tr = [t for t in TRADES if t['date'] == td]
-        bot.reply_to(m, report(tr, 'گزارش امروز'))
+        bot.reply_to(m, report([t for t in TRADES if t['date'] == today()], 'گزارش امروز'))
 
 @bot.message_handler(commands=['stats'])
 def stats_cmd(m):
@@ -373,7 +403,6 @@ def txt(m):
     uid = m.from_user.id
     is_group = m.chat.type in ('group', 'supergroup')
     t = m.text.strip()
-    # آنتی‌اسپم در گروه
     if is_group and is_link(t):
         try:
             bot.delete_message(m.chat.id, m.message_id)
@@ -382,8 +411,7 @@ def txt(m):
             pass
         return
     if not is_group and ('youtube.com' in t or 'youtu.be' in t or 'instagram.com' in t or 'tiktok.com' in t):
-        # حذف‌شده برای سادگی — دانلودر را نگه می‌داریم
-        bot.send_message(uid, '🎬 در حال دانلود... (کتابخانه yt-dlp لازم است)')
+        handle_link(m, t.split()[0])
         return
     for k,v in FAQ:
         if k in t:
@@ -435,7 +463,7 @@ def goldcmd(m):
 
 @bot.message_handler(commands=['broadcast'])
 def bc(m):
-    if m.from_user.id != ADMIN: return
+    if not ensure_admin(m.from_user.id): return
     parts = m.text.split(' ', 1)
     if len(parts) < 2:
         bot.reply_to(m, '📢 /broadcast متن'); return
@@ -447,7 +475,7 @@ def bc(m):
 
 @bot.message_handler(commands=['post'])
 def post(m):
-    if m.from_user.id != ADMIN: return
+    if not ensure_admin(m.from_user.id): return
     parts = m.text.split(' ', 1)
     if len(parts) < 2:
         bot.reply_to(m, '📢 /post متن'); return
@@ -471,7 +499,6 @@ def notifier():
                     if now.hour == h and now.minute == mi:
                         try: bot.send_message(CHANNEL_POST, '🟢 سشن '+fa+' باز شد!')
                         except Exception: pass
-                # جملهٔ روز
                 if now.hour == 9 and now.minute == 0 and today() != last_quote_day:
                     last_quote_day = today()
                     idx = now.timetuple().tm_yday % len(QUOTES)
