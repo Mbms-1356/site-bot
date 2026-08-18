@@ -11,6 +11,13 @@ from flask import Flask, request
 import yt_dlp
 
 TOKEN = '8978486498:AAGjeMhm0f6BMjVX2JA7LbrN4Bcv6M_LET8'
+try:
+    with open(os.path.join(os.path.expanduser('~'), 'token.txt')) as f:
+        _tk = f.read().strip()
+        if _tk:
+            TOKEN = _tk
+except Exception:
+    pass
 bot = telebot.TeleBot(TOKEN)
 
 SITE = 'https://mbms-1356.github.io/forexin-site-/'
@@ -157,11 +164,11 @@ WELCOME = '''سلام {first} عزیز! 🌟
 
 به جمع تریدرهای حرفه‌ای و خانواده فارکسین ترک اصلانی خوش آمدید. کانال‌های ما:
 
-1️⃣  کانال سیگنال و لایو (رایگان)
+1️⃣ 📣 کانال سیگنال و لایو (رایگان)
 @forexin_turkaslanifree
 ✅ تحلیل‌های لحظه‌ای و نکات میلی‌متری
 
-2️⃣ 🎓 کانال بیس و آموزش آکادمی
+2️⃣  کانال بیس و آموزش آکادمی
 @Forexin_Turkaslani_Base
 ✅ اصول استراتژی LIT و مدیریت سرمایه
 
@@ -192,8 +199,8 @@ def menu():
           types.InlineKeyboardButton('📢 کانال سیگنال', url=CHANNEL))
     m.add(types.InlineKeyboardButton('📸 اینستاگرام', url=INSTA),
           types.InlineKeyboardButton('▶️ یوتیوب', url=YOUTUBE))
-    m.add(types.InlineKeyboardButton('🚀 شروع دوباره', callback_data='st'),
-          types.InlineKeyboardButton('🎁 لینک‌های دعوت', callback_data='inv'))
+    m.add(types.InlineKeyboardButton('🎁 لینک‌های دعوت', callback_data='inv'),
+          types.InlineKeyboardButton('🚀 شروع دوباره', callback_data='st'))
     return m
 
 def group_menu():
@@ -217,7 +224,13 @@ def handle_link(m, url):
     wait = bot.send_message(m.chat.id, '⏳ در حال دانلود... صبر کن!')
     def work():
         try:
-            opts = {'outtmpl': os.path.join(DL_DIR, '%(id)s.%(ext)s'), 'format': 'best', 'quiet': True, 'no_warnings': True}
+            opts = {'outtmpl': os.path.join(DL_DIR, '%(id)s.%(ext)s'),
+                    'format': 'best',
+                    'quiet': True, 'no_warnings': True,
+                    'noplaylist': True,
+                    'socket_timeout': 30,
+                    'retries': 3,
+                    'http_headers': {'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'}}
             with yt_dlp.YoutubeDL(opts) as y:
                 info = y.extract_info(url, download=True)
                 fn = y.prepare_filename(info)
@@ -231,7 +244,12 @@ def handle_link(m, url):
             except Exception: pass
             bot.delete_message(m.chat.id, wait.message_id)
         except Exception as e:
-            bot.send_message(m.chat.id, '⚠️ دانلود نشد: ' + str(e)[:150])
+            hint = ''
+            if 'instagram' in url:
+                hint = '\n💡 اینستاگرام گاهی محدود می‌کند؛ فقط لینک Reels عمومی بفرست.'
+            if 'tiktok' in url:
+                hint = '\n💡 تیک‌تاک گاهی مسدود می‌کند؛ یک بار دیگر تلاش کن.'
+            bot.send_message(m.chat.id, '⚠️ دانلود نشد: ' + str(e)[:120] + hint)
     threading.Thread(target=work, daemon=True).start()
 
 def report(trades, title):
@@ -286,7 +304,7 @@ def start(m):
                 state[uid] = {'step':'name','code':a}
                 bot.send_message(uid, '🎟️ کدت ثبت شد!\nنام و نام خانوادگی:')
             return
-    bot.send_message(uid, 'سلام ' + (m.from_user.first_name or 'دوست عزیز') + '! 🌟\nدستیار فارکسین:\n📊 ثبت معامله | 💰 طلا |  دانلود\n👇 چه کمکی کنم؟', reply_markup=menu())
+    bot.send_message(uid, 'سلام ' + (m.from_user.first_name or 'دوست عزیز') + '! 🌟\nدستیار فارکسین:\n📊 ثبت معامله | 💰 طلا | 🎬 دانلود\n👇 چه کمکی کنم؟', reply_markup=menu())
 
 @bot.message_handler(content_types=['new_chat_members'])
 def new_member(m):
@@ -322,9 +340,9 @@ def cb(c):
     if c.data == 'rules':
         bot.send_message(chat, '📜 قوانین گروه:\n\n۱. احترام متقابل\n۲. ممنوع: تبلیغ، اسپم، توهین\n۳. سؤالات فقط دربارهٔ ترید\n۴. اشتراک اطلاعات شخصی ممنوع\n۵. تخلف = حذف\n\n⚠️ مسئولیت معاملات با خودتان است.')
     elif c.data == 'st':
-        bot.send_message(chat, 'سلام ' + (c.from_user.first_name or 'دوست عزیز') + '! 🌟\nدستیار فارکسین:\n📊 ثبت معامله | 💰 طلا |  دانلود\n👇 چه کمکی کنم؟', reply_markup=menu())
+        bot.send_message(chat, 'سلام ' + (c.from_user.first_name or 'دوست عزیز') + '! 🌟\nدستیار فارکسین:\n📊 ثبت معامله | 💰 طلا | 🎬 دانلود\n👇 چه کمکی کنم؟', reply_markup=menu())
     elif c.data == 'inv':
-        bot.send_message(chat, '🎁 لینک‌های دعوت:\n\n🤖 ربات اصلی (دعوت ۲ نفرهٔ آکادمی):\n' + MAINBOT + '\n\n💬 گروه جامعه:\n' + GROUP + '\n\n📢 کانال سیگنال:\n' + CHANNEL)
+        bot.send_message(chat, '🎁 لینک‌های دعوت:\n\n🤖 ربات اصلی (دعوت ۲ نفره آکادمی):\n' + MAINBOT + '\n\n💬 گروه جامعه:\n' + GROUP + '\n\n📢 کانال سیگنال:\n' + CHANNEL)
     elif c.data == 'code':
         state[uid] = {'step':'getcode'}
         bot.send_message(uid, '🎟️ کد VIP را بفرست:')
@@ -586,6 +604,6 @@ if __name__ == '__main__':
         while True:
             try:
                 bot.infinity_polling()
-            except Exception as e:
+            except Exception:
                 print('⚠️ قطعی اینترنت — اتصال دوباره...')
                 _t.sleep(5)
