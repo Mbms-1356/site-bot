@@ -34,6 +34,16 @@ except Exception:
 USERS = set()
 state = {}
 used_codes = set()
+WARNS = {}
+WARN_TXT = {
+'fa':'⚠️ ارسال لینک/تبلیغ ممنوع است! (اخطار {n}/3)',
+'en':'⚠️ Links/ads are not allowed! (Warning {n}/3)',
+'tr':'⚠️ Link/reklam yasaktır! (Uyarı {n}/3)',
+'az':'⚠️ Link/reklam qadağandır! (Xəbərdarlıq {n}/3)',
+'ur':'⚠️ لنک/اشتہار ممنوع ہے! (انتباہ {n}/3)',
+'ku':'⚠️ Lînk/reklam qedexe ye! (Hişyarî {n}/3)',
+'ar':'⚠️ الروابط/الإعلانات ممنوعة! (تحذير {n}/3)'
+}
 
 try:
     with open(DATA_FILE) as f:
@@ -162,6 +172,7 @@ youtube.com/@Forexin.turkaslani
 ✅ ویدیوهای آموزشی کامل
 
 ⚠️ تمام مطالب صرفاً آموزشی‌اند. مسئولیت معاملات با خودتان است.
+🛡️ ارسال لینک و تبلیغ ممنوع (۳ اخطار = مسدودیت).
 
 با آرزوی سودهای پایدار 📈'''
 
@@ -244,7 +255,7 @@ def month_start():
     return datetime.now(tz).strftime('%Y-%m-01')
 
 def is_link(txt):
-    return bool(re.search(r'https?://|t\.me/|@[\w]{5,}', txt))
+    return bool(re.search(r'https?://|t\.me/|@[\w]{5,}|\.com|\.ir|\.net', txt.lower()))
 
 @bot.message_handler(commands=['start'])
 def start(m):
@@ -404,11 +415,26 @@ def txt(m):
     is_group = m.chat.type in ('group', 'supergroup')
     t = m.text.strip()
     if is_group and is_link(t):
-        try:
-            bot.delete_message(m.chat.id, m.message_id)
-            bot.send_message(m.chat.id, '⚠️ لینک حذف شد. تبلیغ ممنوع است.')
-        except Exception:
-            pass
+        if not ensure_admin(uid):
+            try:
+                bot.delete_message(m.chat.id, m.message_id)
+            except Exception:
+                pass
+            langc = (m.from_user.language_code or 'fa').split('-')[0]
+            if langc not in WARN_TXT:
+                langc = 'fa'
+            WARNS[uid] = WARNS.get(uid, 0) + 1
+            n = WARNS[uid]
+            try:
+                bot.send_message(m.chat.id, WARN_TXT[langc].format(n=n))
+            except Exception:
+                pass
+            if n >= 3:
+                try:
+                    bot.ban_chat_member(m.chat.id, uid)
+                    bot.send_message(m.chat.id, '🚫 کاربر به دلیل تکرار تبلیغ مسدود شد.')
+                except Exception:
+                    pass
         return
     if not is_group and ('youtube.com' in t or 'youtu.be' in t or 'instagram.com' in t or 'tiktok.com' in t):
         handle_link(m, t.split()[0])
@@ -548,4 +574,3 @@ if __name__ == '__main__':
     else:
         print('🚀 Bot started in polling mode')
         bot.infinity_polling()
-        
