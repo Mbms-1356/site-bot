@@ -1,8 +1,11 @@
 import os
+import threading
+import time as _t
 from datetime import datetime, timedelta, timezone
 import telebot
 from telebot import types
 from flask import Flask, request
+import yt_dlp
 
 TOKEN = '8978486498:AAGjeMhm0f6BMjVX2JA7LbrN4Bcv6M_LET8'
 bot = telebot.TeleBot(TOKEN)
@@ -13,41 +16,44 @@ CHANNEL_POST = '@forexin_turkaslanifree'
 INSTA = 'https://www.instagram.com/forexin.turkaslani'
 YOUTUBE = 'https://www.youtube.com/@Forexin.turkaslani'
 QUIZ = SITE + 'quiz.html'
+DL_DIR = os.path.join(os.path.expanduser('~'), 'dl')
+os.makedirs(DL_DIR, exist_ok=True)
 
 ADMIN = None
 USERS = set()
 state = {}
 used_codes = set()
 
-SESS = [('سیدنی',0.5,9.5),('توکیو',3.5,12.5),('لندن',10.5,19.5),('نیویورک',15.5,24.5)]
+SESS = [('سیدنی',0,30),('توکیو',3,30),('لندن',10,30),('نیویورک',15,30)]
 
 FAQ = [
 ('پیپ','پیپ (Pip) کوچک‌ترین واحد تغییر قیمت است؛ معمولاً رقم چهارم اعشار (۰٫۰۰۰۱).'),
-('لات','لات (Lot) واحد حجم معامله است؛ لات استاندارد = ۱۰۰۰ واحد ارز پایه.'),
+('لات','لات (Lot) واحد حجم معامله است؛ لات استاندارد = ۱۰۰۰۰ واحد ارز پایه.'),
 ('اهرم','اهرم (Leverage) سرمایهٔ قرضی از بروکر است؛ سود و زیان را چند برابر می‌کند — مراقب!'),
 ('مارجین','مارجین وثیقه‌ای است که بروکر برای باز نگه داشتن معاملهٔ اهرمی نگه می‌دارد.'),
-('استاپ','استاپ‌لاس یعنی خروج خودکار در حد زیان — بیمهٔ زندگی معامله‌گر! هرگز بدون استاپ وارد نشو.'),
-('تارگت','تارگت یعنی خروج در سود هدف. در LIT تارگت = نقدینگی مقابل (استخر بعدی).'),
+('استاپ','استاپ‌لاس یعنی خروج خودکار در حد زیان — بیمهٔ زندگی معامله‌گر!'),
+('تارگت','تارگت یعنی خروج در سود هدف. در LIT تارگت = نقدینگی مقابل.'),
 ('اسپرد','اسپرد فاصلهٔ قیمت خرید و فروش است؛ هزینهٔ بروکر.'),
-('سشن','سشن‌ها به وقت تهران: سیدنی ۰۰:۳۰ | توکیو ۰۳:۳۰ | لندن ۱۰:۳۰ | نیویورک ۱۵:۳۰ — برای وضعیت زنده: /time'),
+('سشن','سشن‌ها به وقت تهران: سیدنی ۰۰:۳۰ | توکیو ۰۳:۳۰ | لندن ۱۰:۳۰ | نیویورک ۱۵:۳۰ — وضعیت زنده: /time'),
 ('بروکر','بروکر رسمی ما WM Markets است؛ لینک IB به‌زودی در سایت.'),
 ('vip','VIP با دعوت یا اشتراک فعال می‌شود؛ اگر کد آزمون داری، دکمهٔ «فعال‌سازی کد VIP» را بزن.'),
-('دعوت','برای آکادمی بیس به ربات اصلی برو: @TurkaslaniFx_bot — دو دوست واقعی دعوت کن.'),
+('دعوت','برای آکادمی بیس: @TurkaslaniFx_bot — دو دوست واقعی دعوت کن.'),
 ('سایت','آدرس سایت: ' + SITE),
 ('آزمون','آزمون LIT + هدیهٔ ۷ روز VIP: ' + QUIZ),
-('واژه','واژه‌نامهٔ ۳۰ اصطلاح کلیدی: ' + SITE + 'vajeh.html'),
-('کندل','آموزش کامل کندل‌استیک با ورود و تارگت: ' + SITE + 'candle.html'),
-('پترن','پترن‌های کلاسیک (سر و شانه، پرچم، دوقلوها): ' + SITE + 'patterns.html'),
-('lit','استراتژی LIT یعنی Liquidity، Imbalance، Trend — آموزش کامل: ' + SITE + 'lit.html'),
+('واژه','واژه‌نامهٔ ۳۰ اصطلاح: ' + SITE + 'vajeh.html'),
+('کندل','آموزش کندل‌استیک: ' + SITE + 'candle.html'),
+('پترن','پترن‌های کلاسیک: ' + SITE + 'patterns.html'),
+('lit','استراتژی LIT: ' + SITE + 'lit.html'),
 ('تله','تله (Trap) ابزار پول هوشمند برای شکار نقدینگی است؛ سایه‌های بلند یعنی تله!'),
-('بیلدآپ','بیلدآپ یعنی تجمع نقدینگی؛ جلوی بیلدآپ خلاف جهت نایست.'),
-('سایکل','سایکل ۹۰ دقیقه: هر ۹۰ دقیقه یک جریان سفارش الگوریتمی جدید؛ سفارش اصلی در سقف سایکل.'),
-('ریسک','دی‌تریدر: ۰٫۲۵ تا ٫۵٪ | اسکالپر: ۰٫۵ تا ۱٪ | سوینگ: ۱ تا ۲٪ — هرگز بیشتر!'),
-('اینستا','صفحهٔ اینستاگرام: ' + INSTA),
-('یوتیوب','کانال یوتیوب: ' + YOUTUBE),
-('ساعت','برای ساعت تهران و سشن‌های باز: /time'),
-('ماشین','ماشین‌حساب پیپ: /pip لات پیپ — مثال: /pip 0.1 20'),
-('پشتیبانی','برای پشتیبانی: @FX_Dow_Jones یا دکمهٔ «بازخورد به ادمین».'),
+('بیلدآپ','بیلدآپ یعنی تجمع نقدینگی؛ جلوی آن خلاف جهت نایست.'),
+('سایکل','سایکل ۹۰ دقیقه: هر ۹۰ دقیقه یک جریان سفارش الگوریتمی جدید.'),
+('ریسک','دی‌تریدر: ۰٫۲۵ تا ۰٫۵٪ | اسکالپر: ۰٫۵ تا ۱٪ | سوینگ: ۱ تا ۲٪.'),
+('اینستا','اینستاگرام: ' + INSTA),
+('یوتیوب','یوتیوب: ' + YOUTUBE),
+('دانلود','🎬 لینک یوتیوب/اینستا/تیک‌تاک را همین‌جا بفرست تا برایت دانلود کنم!'),
+('ساعت','ساعت تهران و سشن‌ها: /time'),
+('ماشین','ماشین‌حساب پیپ: /pip لات پیپ'),
+('پشتیبانی','پشتیبانی: @FX_Dow_Jones یا دکمهٔ «بازخورد به ادمین».'),
 ('کانال','کانال سیگنال رایگان: ' + CHANNEL)
 ]
 
@@ -63,12 +69,54 @@ def menu():
           types.InlineKeyboardButton('▶️ یوتیوب', url=YOUTUBE))
     return m
 
+def handle_link(m, url):
+    wait = bot.send_message(m.chat.id, '⏳ در حال دانلود... صبر کن!')
+    def work():
+        try:
+            opts = {'outtmpl': os.path.join(DL_DIR, '%(id)s.%(ext)s'), 'format': 'best', 'quiet': True, 'no_warnings': True}
+            with yt_dlp.YoutubeDL(opts) as y:
+                info = y.extract_info(url, download=True)
+                fn = y.prepare_filename(info)
+            size = os.path.getsize(fn)
+            if size > 49*1024*1024:
+                bot.send_message(m.chat.id, '⚠️ فایل بزرگ‌تر از ۵۰MB است؛ لینک کوچک‌تر بفرست.')
+            else:
+                with open(fn, 'rb') as f:
+                    bot.send_video(m.chat.id, f, caption='🎬 ' + (info.get('title') or '') + '\n🤖 Forexin Site Bot')
+            try: os.remove(fn)
+            except Exception: pass
+            bot.delete_message(m.chat.id, wait.message_id)
+        except Exception as e:
+            bot.send_message(m.chat.id, '⚠️ دانلود نشد: ' + str(e)[:150])
+    threading.Thread(target=work, daemon=True).start()
+
+def notifier():
+    last = ''
+    while True:
+        try:
+            tz = timezone(timedelta(hours=3, minutes=30))
+            now = datetime.now(tz)
+            key = now.strftime('%Y-%m-%d %H:%M')
+            if key != last:
+                last = key
+                for fa, h, mi in SESS:
+                    if now.hour == h and now.minute == mi:
+                        msg = '🟢 سشن ' + fa + ' باز شد!'
+                        try: bot.send_message(CHANNEL_POST, msg)
+                        except Exception: pass
+                        if ADMIN:
+                            try: bot.send_message(ADMIN, msg)
+                            except Exception: pass
+        except Exception:
+            pass
+        _t.sleep(20)
+
 @bot.message_handler(commands=['start'])
 def start(m):
     global ADMIN
     uid = m.from_user.id
     if m.chat.type != 'private':
-        bot.send_message(m.chat.id, 'سلام! 🤖 دستیار سایت فارکسین هستم؛ برای سؤالات خصوصی، پی‌وی پیام بده.')
+        bot.send_message(m.chat.id, 'سلام! 🤖 دستیار سایت فارکسین هستم؛ برای سؤالات و دانلود، پی‌وی پیام بده.')
         return
     args = m.text.split()
     if ADMIN is None:
@@ -88,7 +136,7 @@ def start(m):
                 state[uid] = {'step':'name','code':a}
                 bot.send_message(uid, '🎟️ کدت ثبت شد!\nنام و نام خانوادگی‌ات را بنویس:')
             return
-    bot.send_message(uid, 'سلام ' + (m.from_user.first_name or 'دوست عزیز') + '! 🌟\nدستیار سایت فارکسین ترک‌اصلانی هستم.\n👇 چه کمکی کنم؟', reply_markup=menu())
+    bot.send_message(uid, 'سلام ' + (m.from_user.first_name or 'دوست عزیز') + '! 🌟\nدستیار سایت فارکسین ترک‌اصلانی هستم.\n🎬 لینک یوتیوب/اینستا/تیک‌تاک بفرستی، دانلود می‌کنم!\n👇 چه کمکی کنم؟', reply_markup=menu())
 
 @bot.callback_query_handler(func=lambda c: True)
 def cb(c):
@@ -116,6 +164,9 @@ def txt(m):
     uid = m.from_user.id
     is_group = m.chat.type in ('group', 'supergroup')
     t = m.text.strip()
+    if not is_group and ('youtube.com' in t or 'youtu.be' in t or 'instagram.com' in t or 'tiktok.com' in t):
+        handle_link(m, t.split()[0])
+        return
     for k,v in FAQ:
         if k in t:
             bot.send_message(m.chat.id, '💡 ' + v)
@@ -151,9 +202,9 @@ def txt(m):
             bot.send_message(uid, '✅ پیامت به ادمین رسید. ممنون! 🙏', reply_markup=menu())
             return
     if m.forward_from or m.forward_from_chat:
-        bot.send_message(uid, '📨 پیام فورواردی‌ات رسید!\nاگر سؤال داری با کلمهٔ کلیدی بنویس (مثل «پیپ»، «سشن»، «اینستا») یا از منو انتخاب کن 👇', reply_markup=menu())
+        bot.send_message(uid, '📨 پیام فورواردی رسید!\nسؤالت را با کلمهٔ کلیدی بنویس یا لینک ویدیو بفرست 🎬', reply_markup=menu())
         return
-    bot.send_message(uid, '🤔 متوجه نشدم؛ از منو انتخاب کن 👇', reply_markup=menu())
+    bot.send_message(uid, '🤔 متوجه نشدم؛ از منو انتخاب کن یا لینک ویدیو بفرست 🎬', reply_markup=menu())
 
 @bot.message_handler(commands=['time'])
 def timecmd(m):
@@ -161,7 +212,9 @@ def timecmd(m):
     now = datetime.now(tz)
     th = now.hour + now.minute/60
     lines = ['🕰️ ساعت تهران: ' + now.strftime('%H:%M')]
-    for fa,o,c in SESS:
+    for fa, h, mi in SESS:
+        o = h + mi/60
+        c = o + 9
         openb = (o < c and o <= th < c) or (o > c and (th >= o or th < c))
         lines.append(('🟢 ' if openb else '🔴 ') + fa + (' — باز' if openb else ' — بسته'))
     bot.send_message(m.chat.id, '\n'.join(lines))
@@ -222,6 +275,8 @@ def hook():
     except Exception:
         pass
     return 'ok'
+
+threading.Thread(target=notifier, daemon=True).start()
 
 if __name__ == '__main__':
     if os.environ.get('PORT'):
