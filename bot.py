@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta, timezone
 import telebot
 from telebot import types
 from flask import Flask, request
@@ -9,6 +10,8 @@ bot = telebot.TeleBot(TOKEN)
 SITE = 'https://mbms-1356.github.io/forexin-site-/'
 CHANNEL = 'https://t.me/forexin_turkaslanifree'
 CHANNEL_POST = '@forexin_turkaslanifree'
+INSTA = 'https://www.instagram.com/forexin.turkaslani'
+YOUTUBE = 'https://www.youtube.com/@Forexin.turkaslani'
 QUIZ = SITE + 'quiz.html'
 
 ADMIN = None
@@ -16,15 +19,17 @@ USERS = set()
 state = {}
 used_codes = set()
 
+SESS = [('سیدنی',0.5,9.5),('توکیو',3.5,12.5),('لندن',10.5,19.5),('نیویورک',15.5,24.5)]
+
 FAQ = [
 ('پیپ','پیپ (Pip) کوچک‌ترین واحد تغییر قیمت است؛ معمولاً رقم چهارم اعشار (۰٫۰۰۰۱).'),
-('لات','لات (Lot) واحد حجم معامله است؛ لات استاندارد = ۱۰۰۰۰ واحد ارز پایه.'),
+('لات','لات (Lot) واحد حجم معامله است؛ لات استاندارد = ۱۰۰۰ واحد ارز پایه.'),
 ('اهرم','اهرم (Leverage) سرمایهٔ قرضی از بروکر است؛ سود و زیان را چند برابر می‌کند — مراقب!'),
 ('مارجین','مارجین وثیقه‌ای است که بروکر برای باز نگه داشتن معاملهٔ اهرمی نگه می‌دارد.'),
-('استاپ','استاپ‌لاس (Stop Loss) یعنی خروج خودکار در حد زیان — بیمهٔ زندگی معامله‌گر! هرگز بدون استاپ وارد نشو.'),
-('تارگت','تارگت (Take Profit) یعنی خروج خودکار در سود هدف. در LIT تارگت = نقدینگی مقابل (استخر بعدی).'),
+('استاپ','استاپ‌لاس یعنی خروج خودکار در حد زیان — بیمهٔ زندگی معامله‌گر! هرگز بدون استاپ وارد نشو.'),
+('تارگت','تارگت یعنی خروج در سود هدف. در LIT تارگت = نقدینگی مقابل (استخر بعدی).'),
 ('اسپرد','اسپرد فاصلهٔ قیمت خرید و فروش است؛ هزینهٔ بروکر.'),
-('سشن','سشن‌ها به وقت تهران: سیدنی ۰۰:۳۰ | توکیو ۰۳:۳۰ | لندن ۱۰:۳۰ | نیویورک ۱۵:۳۰'),
+('سشن','سشن‌ها به وقت تهران: سیدنی ۰۰:۳۰ | توکیو ۰۳:۳۰ | لندن ۱۰:۳۰ | نیویورک ۱۵:۳۰ — برای وضعیت زنده: /time'),
 ('بروکر','بروکر رسمی ما WM Markets است؛ لینک IB به‌زودی در سایت.'),
 ('vip','VIP با دعوت یا اشتراک فعال می‌شود؛ اگر کد آزمون داری، دکمهٔ «فعال‌سازی کد VIP» را بزن.'),
 ('دعوت','برای آکادمی بیس به ربات اصلی برو: @TurkaslaniFx_bot — دو دوست واقعی دعوت کن.'),
@@ -34,11 +39,15 @@ FAQ = [
 ('کندل','آموزش کامل کندل‌استیک با ورود و تارگت: ' + SITE + 'candle.html'),
 ('پترن','پترن‌های کلاسیک (سر و شانه، پرچم، دوقلوها): ' + SITE + 'patterns.html'),
 ('lit','استراتژی LIT یعنی Liquidity، Imbalance، Trend — آموزش کامل: ' + SITE + 'lit.html'),
-('تله','تله (Trap) ابزار پول هوشمند برای شکار نقدینگی است؛ سایه‌های بلند یعنی تله! یادگیری: ' + SITE + 'lit.html'),
-('بیلدآپ','بیلدآپ یعنی تجمع نقدینگی؛ جلوی بیلدآپ خلاف جهت نایست — شانس ریورسال کم است.'),
+('تله','تله (Trap) ابزار پول هوشمند برای شکار نقدینگی است؛ سایه‌های بلند یعنی تله!'),
+('بیلدآپ','بیلدآپ یعنی تجمع نقدینگی؛ جلوی بیلدآپ خلاف جهت نایست.'),
 ('سایکل','سایکل ۹۰ دقیقه: هر ۹۰ دقیقه یک جریان سفارش الگوریتمی جدید؛ سفارش اصلی در سقف سایکل.'),
 ('ریسک','دی‌تریدر: ۰٫۲۵ تا ٫۵٪ | اسکالپر: ۰٫۵ تا ۱٪ | سوینگ: ۱ تا ۲٪ — هرگز بیشتر!'),
-('پشتیبانی','برای پشتیبانی به ادمین پیام بده: @FX_Dow_Jones یا دکمهٔ «بازخورد به ادمین» را بزن.'),
+('اینستا','صفحهٔ اینستاگرام: ' + INSTA),
+('یوتیوب','کانال یوتیوب: ' + YOUTUBE),
+('ساعت','برای ساعت تهران و سشن‌های باز: /time'),
+('ماشین','ماشین‌حساب پیپ: /pip لات پیپ — مثال: /pip 0.1 20'),
+('پشتیبانی','برای پشتیبانی: @FX_Dow_Jones یا دکمهٔ «بازخورد به ادمین».'),
 ('کانال','کانال سیگنال رایگان: ' + CHANNEL)
 ]
 
@@ -50,6 +59,8 @@ def menu():
           types.InlineKeyboardButton('🧠 آزمون LIT', url=QUIZ))
     m.add(types.InlineKeyboardButton('🌐 وب‌سایت', url=SITE),
           types.InlineKeyboardButton('📢 کانال سیگنال', url=CHANNEL))
+    m.add(types.InlineKeyboardButton('📸 اینستاگرام', url=INSTA),
+          types.InlineKeyboardButton('▶️ یوتیوب', url=YOUTUBE))
     return m
 
 @bot.message_handler(commands=['start'])
@@ -62,7 +73,7 @@ def start(m):
     args = m.text.split()
     if ADMIN is None:
         ADMIN = uid
-        bot.send_message(uid, '🛠️ شما ادمین ربات سایت شدید!\nلیدها و بازخوردها همین‌جا می‌آید.\n📢 ارسال به کانال: /post متن\n👥 اطلاع‌رسانی به اعضا: /broadcast متن')
+        bot.send_message(uid, '🛠️ شما ادمین ربات سایت شدید!\n📢 کانال: /post متن\n👥 اعضا: /broadcast متن\n🕰️ سشن‌ها: /time\n🧮 پیپ: /pip لات پیپ')
         return
     USERS.add(uid)
     if len(args) > 1:
@@ -105,22 +116,20 @@ def txt(m):
     uid = m.from_user.id
     is_group = m.chat.type in ('group', 'supergroup')
     t = m.text.strip()
-    # جستجوی سؤالات متداول (هم خصوصی، هم گروه)
     for k,v in FAQ:
         if k in t:
             bot.send_message(m.chat.id, '💡 ' + v)
             return
     if is_group:
-        return  # در گروه، فقط به سؤالات شناخته‌شده جواب بده
+        return
     st = state.get(uid)
     if st:
         step = st['step']
         if step == 'getcode':
-            code = t
-            if code in used_codes:
+            if t in used_codes:
                 bot.send_message(uid, '⚠️ این کد قبلاً استفاده شده.')
             else:
-                state[uid] = {'step':'name','code':code}
+                state[uid] = {'step':'name','code':t}
                 bot.send_message(uid, '✅ کد معتبر است!\nنام و نام خانوادگی‌ات را بنویس:')
             return
         if step == 'name':
@@ -142,9 +151,29 @@ def txt(m):
             bot.send_message(uid, '✅ پیامت به ادمین رسید. ممنون! 🙏', reply_markup=menu())
             return
     if m.forward_from or m.forward_from_chat:
-        bot.send_message(uid, '📨 پیام فورواردی‌ات رسید!\nاگر سؤال داری، خودت با کلمه‌های کلیدی بنویس (مثلاً «پیپ»، «سشن»، «VIP») یا از منو انتخاب کن 👇', reply_markup=menu())
+        bot.send_message(uid, '📨 پیام فورواردی‌ات رسید!\nاگر سؤال داری با کلمهٔ کلیدی بنویس (مثل «پیپ»، «سشن»، «اینستا») یا از منو انتخاب کن 👇', reply_markup=menu())
         return
     bot.send_message(uid, '🤔 متوجه نشدم؛ از منو انتخاب کن 👇', reply_markup=menu())
+
+@bot.message_handler(commands=['time'])
+def timecmd(m):
+    tz = timezone(timedelta(hours=3, minutes=30))
+    now = datetime.now(tz)
+    th = now.hour + now.minute/60
+    lines = ['🕰️ ساعت تهران: ' + now.strftime('%H:%M')]
+    for fa,o,c in SESS:
+        openb = (o < c and o <= th < c) or (o > c and (th >= o or th < c))
+        lines.append(('🟢 ' if openb else '🔴 ') + fa + (' — باز' if openb else ' — بسته'))
+    bot.send_message(m.chat.id, '\n'.join(lines))
+
+@bot.message_handler(commands=['pip'])
+def pipcmd(m):
+    parts = m.text.split()
+    try:
+        lots = float(parts[1]); pips = float(parts[2])
+        bot.reply_to(m, '🧮 ارزش پیپ: حدود $' + str(round(pips*10*lots, 2)))
+    except Exception:
+        bot.reply_to(m, '🧮 روش استفاده: /pip لات پیپ\nمثال: /pip 0.1 20')
 
 @bot.message_handler(commands=['broadcast'])
 def bc(m):
@@ -174,7 +203,6 @@ def post(m):
     except Exception as e:
         bot.reply_to(m, '⚠️ خطا: ' + str(e) + '\nمطمئن شو ربات در کانال ادمین است.')
 
-# ---------- وب‌سرور + وب‌هوک (برای هاست) / پولینگ (برای گوشی) ----------
 app = Flask(__name__)
 
 @app.route('/')
