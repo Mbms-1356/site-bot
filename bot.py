@@ -16,6 +16,8 @@ bot = telebot.TeleBot(TOKEN)
 SITE = 'https://mbms-1356.github.io/forexin-site-/'
 CHANNEL = 'https://t.me/forexin_turkaslanifree'
 CHANNEL_POST = '@forexin_turkaslanifree'
+GROUP = 'https://t.me/forexinturkaslanilitcommuniti'
+MAINBOT = 'https://t.me/TurkaslaniFx_bot'
 INSTA = 'https://www.instagram.com/forexin.turkaslani'
 YOUTUBE = 'https://www.youtube.com/@Forexin.turkaslani'
 QUIZ = SITE + 'quiz.html'
@@ -155,7 +157,7 @@ WELCOME = '''سلام {first} عزیز! 🌟
 
 به جمع تریدرهای حرفه‌ای و خانواده فارکسین ترک اصلانی خوش آمدید. کانال‌های ما:
 
-1️⃣ 📣 کانال سیگنال و لایو (رایگان)
+1️⃣  کانال سیگنال و لایو (رایگان)
 @forexin_turkaslanifree
 ✅ تحلیل‌های لحظه‌ای و نکات میلی‌متری
 
@@ -190,6 +192,8 @@ def menu():
           types.InlineKeyboardButton('📢 کانال سیگنال', url=CHANNEL))
     m.add(types.InlineKeyboardButton('📸 اینستاگرام', url=INSTA),
           types.InlineKeyboardButton('▶️ یوتیوب', url=YOUTUBE))
+    m.add(types.InlineKeyboardButton('🚀 شروع دوباره', callback_data='st'),
+          types.InlineKeyboardButton('🎁 لینک‌های دعوت', callback_data='inv'))
     return m
 
 def group_menu():
@@ -198,6 +202,7 @@ def group_menu():
           types.InlineKeyboardButton('🧠 آزمون LIT', url=QUIZ))
     m.add(types.InlineKeyboardButton('🌐 وب‌سایت', url=SITE),
           types.InlineKeyboardButton('📢 کانال سیگنال', url=CHANNEL))
+    m.add(types.InlineKeyboardButton('🎁 لینک‌های دعوت', callback_data='inv'))
     return m
 
 def gold_price():
@@ -281,7 +286,7 @@ def start(m):
                 state[uid] = {'step':'name','code':a}
                 bot.send_message(uid, '🎟️ کدت ثبت شد!\nنام و نام خانوادگی:')
             return
-    bot.send_message(uid, 'سلام ' + (m.from_user.first_name or 'دوست عزیز') + '! 🌟\nدستیار فارکسین:\n📊 ثبت معامله | 💰 طلا | 🎬 دانلود\n👇 چه کمکی کنم؟', reply_markup=menu())
+    bot.send_message(uid, 'سلام ' + (m.from_user.first_name or 'دوست عزیز') + '! 🌟\nدستیار فارکسین:\n📊 ثبت معامله | 💰 طلا |  دانلود\n👇 چه کمکی کنم؟', reply_markup=menu())
 
 @bot.message_handler(content_types=['new_chat_members'])
 def new_member(m):
@@ -313,8 +318,13 @@ def trade_result(c):
 @bot.callback_query_handler(func=lambda c: True)
 def cb(c):
     uid = c.from_user.id
+    chat = c.message.chat.id
     if c.data == 'rules':
-        bot.send_message(c.message.chat.id, '📜 قوانین گروه:\n\n۱. احترام متقابل\n۲. ممنوع: تبلیغ، اسپم، توهین\n۳. سؤالات فقط دربارهٔ ترید\n۴. اشتراک اطلاعات شخصی ممنوع\n۵. تخلف = حذف\n\n⚠️ مسئولیت معاملات با خودتان است.')
+        bot.send_message(chat, '📜 قوانین گروه:\n\n۱. احترام متقابل\n۲. ممنوع: تبلیغ، اسپم، توهین\n۳. سؤالات فقط دربارهٔ ترید\n۴. اشتراک اطلاعات شخصی ممنوع\n۵. تخلف = حذف\n\n⚠️ مسئولیت معاملات با خودتان است.')
+    elif c.data == 'st':
+        bot.send_message(chat, 'سلام ' + (c.from_user.first_name or 'دوست عزیز') + '! 🌟\nدستیار فارکسین:\n📊 ثبت معامله | 💰 طلا |  دانلود\n👇 چه کمکی کنم؟', reply_markup=menu())
+    elif c.data == 'inv':
+        bot.send_message(chat, '🎁 لینک‌های دعوت:\n\n🤖 ربات اصلی (دعوت ۲ نفرهٔ آکادمی):\n' + MAINBOT + '\n\n💬 گروه جامعه:\n' + GROUP + '\n\n📢 کانال سیگنال:\n' + CHANNEL)
     elif c.data == 'code':
         state[uid] = {'step':'getcode'}
         bot.send_message(uid, '🎟️ کد VIP را بفرست:')
@@ -573,4 +583,9 @@ if __name__ == '__main__':
         app.run(host='0.0.0.0', port=int(os.environ.get('PORT', '10000')))
     else:
         print('🚀 Bot started in polling mode')
-        bot.infinity_polling()
+        while True:
+            try:
+                bot.infinity_polling()
+            except Exception as e:
+                print('⚠️ قطعی اینترنت — اتصال دوباره...')
+                _t.sleep(5)
