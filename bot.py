@@ -1,3 +1,4 @@
+import os
 import telebot
 from telebot import types
 from flask import Flask, request
@@ -7,6 +8,7 @@ bot = telebot.TeleBot(TOKEN)
 
 SITE = 'https://mbms-1356.github.io/forexin-site-/'
 CHANNEL = 'https://t.me/forexin_turkaslanifree'
+CHANNEL_POST = '@forexin_turkaslanifree'
 QUIZ = SITE + 'quiz.html'
 
 ADMIN = None
@@ -16,15 +18,28 @@ used_codes = set()
 
 FAQ = [
 ('پیپ','پیپ (Pip) کوچک‌ترین واحد تغییر قیمت است؛ معمولاً رقم چهارم اعشار (۰٫۰۰۰۱).'),
-('لات','لات (Lot) واحد حجم معامله است؛ لات استاندارد = ۱۰۰۰۰۰ واحد ارز پایه.'),
+('لات','لات (Lot) واحد حجم معامله است؛ لات استاندارد = ۱۰۰۰۰ واحد ارز پایه.'),
 ('اهرم','اهرم (Leverage) سرمایهٔ قرضی از بروکر است؛ سود و زیان را چند برابر می‌کند — مراقب!'),
+('مارجین','مارجین وثیقه‌ای است که بروکر برای باز نگه داشتن معاملهٔ اهرمی نگه می‌دارد.'),
+('استاپ','استاپ‌لاس (Stop Loss) یعنی خروج خودکار در حد زیان — بیمهٔ زندگی معامله‌گر! هرگز بدون استاپ وارد نشو.'),
+('تارگت','تارگت (Take Profit) یعنی خروج خودکار در سود هدف. در LIT تارگت = نقدینگی مقابل (استخر بعدی).'),
+('اسپرد','اسپرد فاصلهٔ قیمت خرید و فروش است؛ هزینهٔ بروکر.'),
 ('سشن','سشن‌ها به وقت تهران: سیدنی ۰۰:۳۰ | توکیو ۰۳:۳۰ | لندن ۱۰:۳۰ | نیویورک ۱۵:۳۰'),
 ('بروکر','بروکر رسمی ما WM Markets است؛ لینک IB به‌زودی در سایت.'),
 ('vip','VIP با دعوت یا اشتراک فعال می‌شود؛ اگر کد آزمون داری، دکمهٔ «فعال‌سازی کد VIP» را بزن.'),
 ('دعوت','برای آکادمی بیس به ربات اصلی برو: @TurkaslaniFx_bot — دو دوست واقعی دعوت کن.'),
 ('سایت','آدرس سایت: ' + SITE),
-('آزمون','آزمون LIT + هدیه: ' + QUIZ),
-('اسپرد','اسپرد فاصلهٔ قیمت خرید و فروش است؛ هزینهٔ بروکر.')
+('آزمون','آزمون LIT + هدیهٔ ۷ روز VIP: ' + QUIZ),
+('واژه','واژه‌نامهٔ ۳۰ اصطلاح کلیدی: ' + SITE + 'vajeh.html'),
+('کندل','آموزش کامل کندل‌استیک با ورود و تارگت: ' + SITE + 'candle.html'),
+('پترن','پترن‌های کلاسیک (سر و شانه، پرچم، دوقلوها): ' + SITE + 'patterns.html'),
+('lit','استراتژی LIT یعنی Liquidity، Imbalance، Trend — آموزش کامل: ' + SITE + 'lit.html'),
+('تله','تله (Trap) ابزار پول هوشمند برای شکار نقدینگی است؛ سایه‌های بلند یعنی تله! یادگیری: ' + SITE + 'lit.html'),
+('بیلدآپ','بیلدآپ یعنی تجمع نقدینگی؛ جلوی بیلدآپ خلاف جهت نایست — شانس ریورسال کم است.'),
+('سایکل','سایکل ۹۰ دقیقه: هر ۹۰ دقیقه یک جریان سفارش الگوریتمی جدید؛ سفارش اصلی در سقف سایکل.'),
+('ریسک','دی‌تریدر: ۰٫۲۵ تا ٫۵٪ | اسکالپر: ۰٫۵ تا ۱٪ | سوینگ: ۱ تا ۲٪ — هرگز بیشتر!'),
+('پشتیبانی','برای پشتیبانی به ادمین پیام بده: @FX_Dow_Jones یا دکمهٔ «بازخورد به ادمین» را بزن.'),
+('کانال','کانال سیگنال رایگان: ' + CHANNEL)
 ]
 
 def menu():
@@ -41,10 +56,13 @@ def menu():
 def start(m):
     global ADMIN
     uid = m.from_user.id
+    if m.chat.type != 'private':
+        bot.send_message(m.chat.id, 'سلام! 🤖 دستیار سایت فارکسین هستم؛ برای سؤالات خصوصی، پی‌وی پیام بده.')
+        return
     args = m.text.split()
     if ADMIN is None:
         ADMIN = uid
-        bot.send_message(uid, '🛠️ شما ادمین ربات سایت شدید!\nلیدها و بازخوردها همین‌جا می‌آید.\nاطلاع‌رسانی: /broadcast متن')
+        bot.send_message(uid, '🛠️ شما ادمین ربات سایت شدید!\nلیدها و بازخوردها همین‌جا می‌آید.\n📢 ارسال به کانال: /post متن\n👥 اطلاع‌رسانی به اعضا: /broadcast متن')
         return
     USERS.add(uid)
     if len(args) > 1:
@@ -85,11 +103,20 @@ def cb(c):
 @bot.message_handler(func=lambda m: m.text and not m.text.startswith('/'), content_types=['text'])
 def txt(m):
     uid = m.from_user.id
+    is_group = m.chat.type in ('group', 'supergroup')
+    t = m.text.strip()
+    # جستجوی سؤالات متداول (هم خصوصی، هم گروه)
+    for k,v in FAQ:
+        if k in t:
+            bot.send_message(m.chat.id, '💡 ' + v)
+            return
+    if is_group:
+        return  # در گروه، فقط به سؤالات شناخته‌شده جواب بده
     st = state.get(uid)
     if st:
         step = st['step']
         if step == 'getcode':
-            code = m.text.strip()
+            code = t
             if code in used_codes:
                 bot.send_message(uid, '⚠️ این کد قبلاً استفاده شده.')
             else:
@@ -97,14 +124,14 @@ def txt(m):
                 bot.send_message(uid, '✅ کد معتبر است!\nنام و نام خانوادگی‌ات را بنویس:')
             return
         if step == 'name':
-            st['name'] = m.text.strip()
+            st['name'] = t
             st['step'] = 'phone'
             bot.send_message(uid, '📱 حالا شمارهٔ تلگرامت را بفرست:')
             return
         if step == 'phone':
             used_codes.add(st['code'])
             if ADMIN:
-                bot.send_message(ADMIN, '🎁 لید جدید آزمون!\n👤 ' + st['name'] + '\n📱 ' + m.text.strip() + '\n🎟️ کد: ' + st['code'])
+                bot.send_message(ADMIN, '🎁 لید جدید آزمون!\n👤 ' + st['name'] + '\n📱 ' + t + '\n🎟️ کد: ' + st['code'])
             del state[uid]
             bot.send_message(uid, '🎉 عالی! کدت فعال شد.\n۷ روز VIP رایگان — ادمین به‌زودی پیام می‌دهد. ✅', reply_markup=menu())
             return
@@ -114,11 +141,9 @@ def txt(m):
             del state[uid]
             bot.send_message(uid, '✅ پیامت به ادمین رسید. ممنون! 🙏', reply_markup=menu())
             return
-    t = m.text.strip()
-    for k,v in FAQ:
-        if k in t:
-            bot.send_message(uid, '💡 ' + v)
-            return
+    if m.forward_from or m.forward_from_chat:
+        bot.send_message(uid, '📨 پیام فورواردی‌ات رسید!\nاگر سؤال داری، خودت با کلمه‌های کلیدی بنویس (مثلاً «پیپ»، «سشن»، «VIP») یا از منو انتخاب کن 👇', reply_markup=menu())
+        return
     bot.send_message(uid, '🤔 متوجه نشدم؛ از منو انتخاب کن 👇', reply_markup=menu())
 
 @bot.message_handler(commands=['broadcast'])
@@ -136,7 +161,20 @@ def bc(m):
             pass
     bot.reply_to(m, '📢 ارسال شد به ' + str(n) + ' نفر.')
 
-# ---------- وب‌سرور + وب‌هوک (برای Render) ----------
+@bot.message_handler(commands=['post'])
+def post(m):
+    if m.from_user.id != ADMIN: return
+    parts = m.text.split(' ', 1)
+    if len(parts) < 2:
+        bot.reply_to(m, '📢 روش استفاده: /post متن پیام کانال')
+        return
+    try:
+        bot.send_message(CHANNEL_POST, parts[1])
+        bot.reply_to(m, '✅ در کانال منتشر شد!')
+    except Exception as e:
+        bot.reply_to(m, '⚠️ خطا: ' + str(e) + '\nمطمئن شو ربات در کانال ادمین است.')
+
+# ---------- وب‌سرور + وب‌هوک (برای هاست) / پولینگ (برای گوشی) ----------
 app = Flask(__name__)
 
 @app.route('/')
@@ -157,7 +195,6 @@ def hook():
         pass
     return 'ok'
 
-import os
 if __name__ == '__main__':
     if os.environ.get('PORT'):
         app.run(host='0.0.0.0', port=int(os.environ.get('PORT', '10000')))
