@@ -1,6 +1,8 @@
 import os
+import json
 import threading
 import time as _t
+import urllib.request
 from datetime import datetime, timedelta, timezone
 import telebot
 from telebot import types
@@ -27,16 +29,16 @@ used_codes = set()
 SESS = [('سیدنی',0,30),('توکیو',3,30),('لندن',10,30),('نیویورک',15,30)]
 
 FAQ = [
-('پیپ','پیپ (Pip) کوچک‌ترین واحد تغییر قیمت است؛ معمولاً رقم چهارم اعشار (۰٫۰۰۰۱).'),
-('لات','لات (Lot) واحد حجم معامله است؛ لات استاندارد = ۱۰۰۰۰ واحد ارز پایه.'),
-('اهرم','اهرم (Leverage) سرمایهٔ قرضی از بروکر است؛ سود و زیان را چند برابر می‌کند — مراقب!'),
-('مارجین','مارجین وثیقه‌ای است که بروکر برای باز نگه داشتن معاملهٔ اهرمی نگه می‌دارد.'),
-('استاپ','استاپ‌لاس یعنی خروج خودکار در حد زیان — بیمهٔ زندگی معامله‌گر!'),
-('تارگت','تارگت یعنی خروج در سود هدف. در LIT تارگت = نقدینگی مقابل.'),
-('اسپرد','اسپرد فاصلهٔ قیمت خرید و فروش است؛ هزینهٔ بروکر.'),
-('سشن','سشن‌ها به وقت تهران: سیدنی ۰۰:۳۰ | توکیو ۰۳:۳۰ | لندن ۱۰:۳۰ | نیویورک ۱۵:۳۰ — وضعیت زنده: /time'),
+('پیپ','کوچک‌ترین واحد تغییر قیمت؛ معمولاً رقم چهارم اعشار (۰٫۰۰۰۱).'),
+('لات','واحد حجم معامله؛ لات استاندارد = ۱۰۰۰۰ واحد ارز پایه.'),
+('اهرم','سرمایهٔ قرضی از بروکر؛ سود و زیان را چند برابر می‌کند — مراقب!'),
+('مارجین','وثیقه‌ای که بروکر برای معاملهٔ اهرمی نگه می‌دارد.'),
+('استاپ','خروج خودکار در حد زیان — بیمهٔ زندگی معامله‌گر!'),
+('تارگت','خروج در سود هدف؛ در LIT تارگت = نقدینگی مقابل.'),
+('اسپرد','فاصلهٔ قیمت خرید و فروش؛ هزینهٔ بروکر.'),
+('سشن','سیدنی ۰۰:۳۰ | توکیو ۰۳:۳۰ | لندن ۱۰:۳۰ | نیویورک ۱۵:۳۰ (تهران) — زنده: /time'),
 ('بروکر','بروکر رسمی ما WM Markets است؛ لینک IB به‌زودی در سایت.'),
-('vip','VIP با دعوت یا اشتراک فعال می‌شود؛ اگر کد آزمون داری، دکمهٔ «فعال‌سازی کد VIP» را بزن.'),
+('vip','با دعوت یا اشتراک؛ اگر کد آزمون داری دکمهٔ «فعال‌سازی کد VIP» را بزن.'),
 ('دعوت','برای آکادمی بیس: @TurkaslaniFx_bot — دو دوست واقعی دعوت کن.'),
 ('سایت','آدرس سایت: ' + SITE),
 ('آزمون','آزمون LIT + هدیهٔ ۷ روز VIP: ' + QUIZ),
@@ -44,23 +46,32 @@ FAQ = [
 ('کندل','آموزش کندل‌استیک: ' + SITE + 'candle.html'),
 ('پترن','پترن‌های کلاسیک: ' + SITE + 'patterns.html'),
 ('lit','استراتژی LIT: ' + SITE + 'lit.html'),
-('تله','تله (Trap) ابزار پول هوشمند برای شکار نقدینگی است؛ سایه‌های بلند یعنی تله!'),
-('بیلدآپ','بیلدآپ یعنی تجمع نقدینگی؛ جلوی آن خلاف جهت نایست.'),
-('سایکل','سایکل ۹۰ دقیقه: هر ۹۰ دقیقه یک جریان سفارش الگوریتمی جدید.'),
-('ریسک','دی‌تریدر: ۰٫۲۵ تا ۰٫۵٪ | اسکالپر: ۰٫۵ تا ۱٪ | سوینگ: ۱ تا ۲٪.'),
+('تله','ابزار پول هوشمند برای شکار نقدینگی؛ سایه‌های بلند یعنی تله!'),
+('بیلدآپ','تجمع نقدینگی؛ جلوی آن خلاف جهت نایست.'),
+('سایکل','هر ۹۰ دقیقه یک جریان سفارش الگوریتمی جدید؛ سفارش اصلی در سقف سایکل.'),
+('ریسک','دی‌تریدر: ۰٫۲۵ تا ۰٫۵٪ | اسکالپر: ۰٫۵ تا ۱٪ | سوینگ: ۱ تا ٪.'),
 ('اینستا','اینستاگرام: ' + INSTA),
 ('یوتیوب','یوتیوب: ' + YOUTUBE),
-('دانلود','🎬 لینک یوتیوب/اینستا/تیک‌تاک را همین‌جا بفرست تا برایت دانلود کنم!'),
+('دانلود','🎬 لینک یوتیوب/اینستا/تیک‌تاک را بفرست تا دانلود کنم!'),
+('طلا','💰 قیمت لحظه‌ای طلا: /gold'),
 ('ساعت','ساعت تهران و سشن‌ها: /time'),
 ('ماشین','ماشین‌حساب پیپ: /pip لات پیپ'),
-('پشتیبانی','پشتیبانی: @FX_Dow_Jones یا دکمهٔ «بازخورد به ادمین».'),
+('پشتیبانی','@FX_Dow_Jones یا دکمهٔ «بازخورد به ادمین».'),
 ('کانال','کانال سیگنال رایگان: ' + CHANNEL)
 ]
+
+def gold_price():
+    url = 'https://data-asg.goldprice.org/dbXRates/USD'
+    req = urllib.request.Request(url, headers={'User-Agent':'Mozilla/5.0'})
+    d = json.load(urllib.request.urlopen(req, timeout=10))
+    return round(d['items'][0]['xau_price'], 2)
 
 def menu():
     m = types.InlineKeyboardMarkup()
     m.add(types.InlineKeyboardButton('🎟️ فعال‌سازی کد VIP', callback_data='code'),
           types.InlineKeyboardButton('❓ سؤالات متداول', callback_data='faq'))
+    m.add(types.InlineKeyboardButton('💰 قیمت طلا', callback_data='gold'),
+          types.InlineKeyboardButton('🎬 دانلود ویدیو', callback_data='dl'))
     m.add(types.InlineKeyboardButton('💬 بازخورد به ادمین', callback_data='fb'),
           types.InlineKeyboardButton('🧠 آزمون LIT', url=QUIZ))
     m.add(types.InlineKeyboardButton('🌐 وب‌سایت', url=SITE),
@@ -101,12 +112,12 @@ def notifier():
                 last = key
                 for fa, h, mi in SESS:
                     if now.hour == h and now.minute == mi:
-                        msg = '🟢 سشن ' + fa + ' باز شد!'
-                        try: bot.send_message(CHANNEL_POST, msg)
+                        try: bot.send_message(CHANNEL_POST, '🟢 سشن ' + fa + ' باز شد!')
                         except Exception: pass
-                        if ADMIN:
-                            try: bot.send_message(ADMIN, msg)
-                            except Exception: pass
+                if now.hour == 9 and now.minute == 0:
+                    k, v = FAQ[now.timetuple().tm_yday % len(FAQ)]
+                    try: bot.send_message(CHANNEL_POST, '📚 واژهٔ روز: ' + k + '\n💡 ' + v + '\n🤖 Forexin Site Bot')
+                    except Exception: pass
         except Exception:
             pass
         _t.sleep(20)
@@ -116,12 +127,12 @@ def start(m):
     global ADMIN
     uid = m.from_user.id
     if m.chat.type != 'private':
-        bot.send_message(m.chat.id, 'سلام! 🤖 دستیار سایت فارکسین هستم؛ برای سؤالات و دانلود، پی‌وی پیام بده.')
+        bot.send_message(m.chat.id, 'سلام! 🤖 دستیار سایت فارکسین هستم؛ برای سؤال و دانلود، پی‌وی پیام بده.')
         return
     args = m.text.split()
     if ADMIN is None:
         ADMIN = uid
-        bot.send_message(uid, '🛠️ شما ادمین ربات سایت شدید!\n📢 کانال: /post متن\n👥 اعضا: /broadcast متن\n🕰️ سشن‌ها: /time\n🧮 پیپ: /pip لات پیپ')
+        bot.send_message(uid, '🛠️ شما ادمین ربات سایت شدید!\n📢 کانال: /post متن\n👥 اعضا: /broadcast متن\n🕰️ سشن‌ها: /time\n💰 طلا: /gold\n🧮 پیپ: /pip لات پیپ')
         return
     USERS.add(uid)
     if len(args) > 1:
@@ -136,7 +147,7 @@ def start(m):
                 state[uid] = {'step':'name','code':a}
                 bot.send_message(uid, '🎟️ کدت ثبت شد!\nنام و نام خانوادگی‌ات را بنویس:')
             return
-    bot.send_message(uid, 'سلام ' + (m.from_user.first_name or 'دوست عزیز') + '! 🌟\nدستیار سایت فارکسین ترک‌اصلانی هستم.\n🎬 لینک یوتیوب/اینستا/تیک‌تاک بفرستی، دانلود می‌کنم!\n👇 چه کمکی کنم؟', reply_markup=menu())
+    bot.send_message(uid, 'سلام ' + (m.from_user.first_name or 'دوست عزیز') + '! 🌟\nدستیار سایت فارکسین ترک‌اصلانی:\n🎬 دانلود ویدیو | 💰 قیمت طلا | 📚 آموزش\n👇 چه کمکی کنم؟', reply_markup=menu())
 
 @bot.callback_query_handler(func=lambda c: True)
 def cb(c):
@@ -155,6 +166,13 @@ def cb(c):
     elif c.data == 'fb':
         state[uid] = {'step':'fb'}
         bot.send_message(uid, '💬 پیام/پیشنهاد/انتقادت را بنویس؛ مستقیم به ادمین می‌رسد:')
+    elif c.data == 'gold':
+        try:
+            bot.send_message(uid, '💰 قیمت لحظه‌ای طلا (XAU/USD): $' + str(gold_price()))
+        except Exception:
+            bot.send_message(uid, '⚠️ قیمت طلا الان در دسترس نیست؛ چند دقیقهٔ دیگر دوباره بزن.')
+    elif c.data == 'dl':
+        bot.send_message(uid, '🎬 لینک یوتیوب / اینستاگرام / تیک‌تاک را همین‌جا بفرست تا برایت دانلود کنم!')
     elif c.data.startswith('f'):
         bot.send_message(uid, '💡 ' + FAQ[int(c.data[1:])][1])
     bot.answer_callback_query(c.id)
@@ -218,6 +236,13 @@ def timecmd(m):
         openb = (o < c and o <= th < c) or (o > c and (th >= o or th < c))
         lines.append(('🟢 ' if openb else '🔴 ') + fa + (' — باز' if openb else ' — بسته'))
     bot.send_message(m.chat.id, '\n'.join(lines))
+
+@bot.message_handler(commands=['gold'])
+def goldcmd(m):
+    try:
+        bot.reply_to(m, '💰 قیمت لحظه‌ای طلا (XAU/USD): $' + str(gold_price()))
+    except Exception:
+        bot.reply_to(m, '⚠️ قیمت طلا الان در دسترس نیست؛ چند دقیقهٔ دیگر دوباره بزن.')
 
 @bot.message_handler(commands=['pip'])
 def pipcmd(m):
