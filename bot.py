@@ -122,7 +122,7 @@ QUOTES = [
 
 FAQ = [
 ('پیپ','کوچک‌ترین واحد تغییر قیمت؛ معمولاً رقم چهارم اعشار.'),
-('لات','واحد حجم معامله؛ لات استاندارد = ۱۰۰۰۰۰ واحد ارز پایه.'),
+('لات','واحد حجم معامله؛ لات استاندارد = ۱۰۰۰۰ واحد ارز پایه.'),
 ('اهرم','سرمایهٔ قرضی از بروکر؛ سود و زیان را چند برابر می‌کند.'),
 ('استاپ','خروج خودکار در حد زیان — بیمهٔ زندگی معامله‌گر!'),
 ('تارگت','خروج در سود هدف؛ در LIT تارگت = نقدینگی مقابل.'),
@@ -430,7 +430,7 @@ def txt(m):
                 bot.send_message(uid, '✅ نام و نام خانوادگی:')
         elif step == 'name':
             st['name'] = t; st['step'] = 'phone'
-            bot.send_message(uid, '📱 شمارهٔ تلگرام:')
+            bot.send_message(uid, '📱 شماره تلگرام:')
         elif step == 'phone':
             used_codes.add(st['code'])
             if ADMIN:
@@ -488,6 +488,7 @@ def post(m):
 def notifier():
     last = ''
     last_quote_day = ''
+    last_news_day = ''
     while True:
         try:
             tz = timezone(timedelta(hours=3, minutes=30))
@@ -495,11 +496,24 @@ def notifier():
             key = now.strftime('%Y-%m-%d %H:%M')
             if key != last:
                 last = key
-                for fa, h, mi in SESS:
-                    if now.hour == h and now.minute == mi:
-                        try: bot.send_message(CHANNEL_POST, '🟢 سشن '+fa+' باز شد!')
-                        except Exception: pass
-                if now.hour == 9 and now.minute == 0 and today() != last_quote_day:
+                hm = (now.hour, now.minute)
+                if hm == (10, 30):
+                    try: bot.send_message(CHANNEL_POST, '🟢 سشن لندن باز شد!')
+                    except Exception: pass
+                if hm == (15, 0) and today() != last_news_day:
+                    last_news_day = today()
+                    msg = '📰 یادآور اخبار اقتصادی:\nقبل از سشن نیویورک، تقویم اقتصادی را چک کن:\nwww.forexfactory.com/calendar'
+                    if now.weekday() == 4 and now.day <= 7:
+                        msg += '\n\n⚠️ امروز جمعهٔ اول ماه است — روز NFP! نوسان شدید!'
+                    try: bot.send_message(CHANNEL_POST, msg)
+                    except Exception: pass
+                if hm == (15, 30):
+                    try: bot.send_message(CHANNEL_POST, '🟢 سشن نیویورک باز شد!')
+                    except Exception: pass
+                if hm == (19, 30):
+                    try: bot.send_message(CHANNEL_POST, '🔴 سشن لندن بسته شد — نیویورک ادامه دارد.')
+                    except Exception: pass
+                if hm == (9, 0) and today() != last_quote_day:
                     last_quote_day = today()
                     idx = now.timetuple().tm_yday % len(QUOTES)
                     try: bot.send_message(CHANNEL_POST, '🌟 جملهٔ روز:\n\n💡 '+QUOTES[idx]+'\n\n🤖 Forexin Site Bot')
@@ -534,3 +548,4 @@ if __name__ == '__main__':
     else:
         print('🚀 Bot started in polling mode')
         bot.infinity_polling()
+        
