@@ -1,4 +1,4 @@
-import os, json, threading, time as _t, re, urllib.request, ssl
+import os, json, threading, time as _t, re, urllib.request, urllib.parse, ssl
 from datetime import datetime, timedelta, timezone
 import telebot
 from telebot import types
@@ -117,29 +117,17 @@ GLOSS = {
 
 BASE_GUIDE = '''📌 راهنمای کامل ورود به کانال بیس (آکادمی)
 
-🎯 کانال بیس چیست؟
-@Forexin_Turkaslani_Base
+🎯 کانال بیس: @Forexin_Turkaslani_Base
 آکادمی عملی: آموزش استراتژی LIT، کار با صرافی و بروکر، مدیریت سرمایه.
 
 🔑 روش ورود (تنها روش):
-1️⃣ ربات رسمی را استارت کنید: @TurkaslaniSiteBot و بنویسید /start
-2️⃣ دکمه «🎟️ لینک دعوت» را بزنید؛ لینک اختصاصی شما + تعداد دعوت‌هایتان نمایش داده می‌شود.
+1️⃣ ربات رسمی: @TurkaslaniSiteBot و بنویسید /start
+2️⃣ دکمه «🎟️ لینک دعوت» را بزنید؛ لینک اختصاصی شما نمایش داده می‌شود.
 3️⃣ لینک‌تان را برای ۲ دوست بفرستید.
 4️⃣ دوست‌ها با لینک شما عضو کانال رایگان شوند؛ هر عضو موفق = ۱ دعوت.
 5️⃣ بعد از ۲ دعوت واقعی، لینک ورود به کانال بیس خودکار ارسال می‌شود. 🎉
 
-❓ سوالات پرتکرار:
-۱. چرا حذف شدم؟ عضو کانال رایگان نبودید یا ۲ دعوت کامل نبود.
-۲. دعوت شمرده نشد؟ دوست باید دقیقاً با لینک شخصی شما عضو شود.
-۳. چند دعوت دارم؟ در ربات /start بزنید.
-۴. ربات پیام نمی‌دهد؟ حتماً /start زده باشید.
-۵. لینک منقضی می‌شود؟ بله، یک‌بار مصرف است.
-۶. از بیس خارج شوم؟ دسترسی باطل می‌شود.
-۷. رایگان است؟ بله ۱۰۰٪ رایگان. 💚
-
-🎓 لینک کانال بیس: @Forexin_Turkaslani_Base
-⚠️ فقط برای کسانی باز می‌شود که دسترسی‌شان فعال شده باشد.
-💚 تیم Forexin Turkaslani'''
+ تیم Forexin Turkaslani'''
 
 WELCOME_PRIV = 'سلام! 👋\nمن دستیار فارکسین ترک اصلانی هستم.\n<i>📊 ژورنال معاملاتی | 💰 قیمت لحظه‌ای | 🎬 دانلودر | 📚 آموزش</i>'
 
@@ -159,7 +147,7 @@ youtube.com/@Forexin.turkaslani
 🚫 ارسال لینک و تبلیغ ممنوع (۲ اخطار = مسدودیت).
 با آرزوی سودهای پایدار 📈'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪', 'GBP': '🇧', 'JPY': '🇯🇵', 'CNY': '🇨', 'AUD': '🇦', 'CAD': '🇦', 'CHF': '🇨', 'NZD': '🇳'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -272,21 +260,40 @@ def news_today():
     except Exception: pass
     return None
 
+def tiktok_dl(u):
+    q = urllib.parse.quote(u, safe='')
+    try:
+        r = requests.get('https://www.tikwm.com/api/?hd=1&url=' + q, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
+        res = r.json()
+        if res.get('code') == 0:
+            return res['data']
+    except Exception: pass
+    try:
+        r = requests.post('https://tikwm.com/api/', data={'url': u, 'hd': 1}, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
+        res = r.json()
+        if res.get('code') == 0:
+            return res['data']
+    except Exception: pass
+    try:
+        r = requests.get('https://api.tiklydown.eu.org/api/download?url=' + q, timeout=20)
+        d = r.json()
+        v = d.get('video')
+        if v and v.get('playback'):
+            return {'play': v['playback'], 'hdplay': v['playback'], 'title': d.get('title', 'TikTok')}
+    except Exception: pass
+    raise Exception('tiktok all sources failed')
+
 def handle_download(m, url):
     wait = bot.send_message(m.chat.id, '⏳ <b>در حال دانلود... صبر کنید!</b>')
     def job():
         try:
             if 'tiktok.com' in url:
-                r = requests.post('https://tikwm.com/api/', data={'url': url, 'hd': 1}, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
-                res = r.json()
-                if res.get('code') != 0:
-                    raise Exception('tikwm error')
-                vd = res['data']
+                vd = tiktok_dl(url)
                 vurl = vd.get('hdplay') or vd.get('play')
                 if vurl and not vurl.startswith('http'):
                     vurl = 'https://tikwm.com' + vurl
-                data = requests.get(vurl, timeout=30).content
-                title = vd.get('title', 'TikTok Video')[:50]
+                data = requests.get(vurl, timeout=30, headers={'User-Agent': 'Mozilla/5.0'}).content
+                title = (vd.get('title') or 'TikTok Video')[:50]
             else:
                 opts = {
                     'outtmpl': os.path.join(DL_DIR, '%(id)s.%(ext)s'),
@@ -355,7 +362,7 @@ def start(m):
         return
     if ADMIN is None:
         ensure_admin(uid)
-        bot.send_message(uid, '🛠️ <b>شما ادمین شدند!</b>')
+        bot.send_message(uid, '🛠️ <b>شما ادمین شدید!</b>')
         return
     USERS.add(uid)
     extra = ''
