@@ -134,7 +134,7 @@ QUOTES = [
 ]
 
 GLOSS = {
-    'lat': 'لات: واحد حجم معامله؛ ۱ لات = ۱۰ واحد ارز پایه.',
+    'lat': 'لات: واحد حجم معامله؛ ۱ لات = ۱۰۰ واحد ارز پایه.',
     'pip': 'پیپ: کوچک‌ترین واحد تغییر قیمت.',
     'stop': 'استاپ: سفارش محدودکنندهٔ ضرر.',
     'ahrom': 'اهرم: سرمایهٔ قرضی از بروکر.',
@@ -174,7 +174,7 @@ WELCOME_GROUP = '''سلام {first} عزیز! 🌟
 
 ⚠️ مطالب آموزشی | 🚫 لینک/تبلیغ ممنوع.'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦', 'CAD': '🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -205,14 +205,14 @@ def fetch_json(url):
     req = urllib.request.Request(url, headers={'User-Agent': UA})
     return json.load(urllib.request.urlopen(req, timeout=6, context=ctx))
 
-def fetch_text(url, referer=None):
+def fetch_text(url, referer=None, timeout=10):
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     headers = {'User-Agent': UA}
     if referer: headers['Referer'] = referer
     req = urllib.request.Request(url, headers=headers)
-    return urllib.request.urlopen(req, timeout=10, context=ctx).read().decode('utf-8', 'ignore')
+    return urllib.request.urlopen(req, timeout=timeout, context=ctx).read().decode('utf-8', 'ignore')
 
 def tehran_now():
     return datetime.now(timezone(timedelta(hours=3, minutes=30)))
@@ -239,7 +239,7 @@ def gold18_text(p):
     try:
         g = fetch_json('https://api.gold-api.com/price/XAU')
         ounce = float(g['price'])
-        return f"\n🥇 طلای ۱۸ عیار: {int(p * ounce / 31.1035 * 0.75):,} تومان/گرم"
+        return f"\n🪙 طلای ۱۸ عیار: {int(p * ounce / 31.1035 * 0.75):,} تومان/گرم"
     except Exception:
         return ''
 
@@ -253,6 +253,12 @@ def get_usdt_only():
                 results.append((name, p))
         except Exception as e:
             errs.append(f"{name}: {str(e)[:25]}")
+    def toman_regex(body):
+        for m in re.finditer(r'([0-9][0-9,]{5,8})\s*تومان', body):
+            v = clean(m.group(1))
+            if 100000 < v < 400000:
+                return v
+        raise Exception('parse')
     def find_key(obj, keys):
         if isinstance(obj, dict):
             for k, v in obj.items():
@@ -274,8 +280,6 @@ def get_usdt_only():
         return None
     def next_data(body):
         m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', body, re.S)
-        if not m:
-            m = re.search(r'<script[^>]*id="__NEXT_DATA__"[^>]*>(.*?)</script>', body, re.S)
         return json.loads(m.group(1)) if m else None
     def nobitex():
         body = fetch_text('https://nobitex.ir/price/usdt/')
@@ -286,23 +290,12 @@ def get_usdt_only():
                 if v > 1000000:
                     v //= 10
                 return v
-        m = re.search(r'([0-9][0-9,]{5,8})\s*تومان', body)
-        if m:
-            return clean(m.group(1))
-        raise Exception('parse')
-    def ompfinex():
-        body = fetch_text('https://www.ompfinex.com/markets/usdt-price')
-        d = next_data(body)
-        if d:
-            v = find_key(d, {'last', 'lastPrice', 'current'})
-            if v and 100000 < v < 400000:
-                return v
-        m = re.search(r'([0-9][0-9,]{5,8})\s*تومان', body)
-        if m:
-            return clean(m.group(1))
-        raise Exception('parse')
+        return toman_regex(body)
+    def jina(url):
+        return toman_regex(fetch_text('https://r.jina.ai/' + url, timeout=25))
     add('نوبیتکس', nobitex)
-    add('اُم‌فاینکس', ompfinex)
+    add('نوبیتکس‌رندر', lambda: jina('https://nobitex.ir/price/usdt/'))
+    add('اُم‌فاینکس‌رندر', lambda: jina('https://www.ompfinex.com/markets/usdt-price'))
     try:
         d = requests.post('https://api.tabdeal.org/api/v1/market/ticker?symbol=USDTIRT', headers={'User-Agent': UA}, timeout=6).json()
         p = clean(d.get('data', {}).get('last') or d.get('last') or 0)
@@ -313,13 +306,13 @@ def get_usdt_only():
     if results:
         name, p = results[0]
         save_usdt_cache(p, name)
-        return f"🇮🇷 <b>قیمت لحظه‌ای بازار ایران:</b>\n🪙 تتر: {p:,} تومان{gold18_text(p)}\n🏦 منبع: {name}\n<i>🤖 Forexin Bot</i>"
+        return f"🇮🇷 <b>قیمت لحظه‌ای بازار ایران:</b>\n💵 تتر: {p:,} تومان{gold18_text(p)}\n🏦 منبع: {name}\n<i>🤖 Forexin Bot</i>"
     if USDT_CACHE.get('price'):
         age = int(_t.time()) - USDT_CACHE.get('ts', 0)
         if age < 24 * 3600:
             p = USDT_CACHE['price']
             mins = max(1, age // 60)
-            return f"🇮🇷 <b>قیمت بازار ایران:</b>\n🪙 تتر: {p:,} تومان{gold18_text(p)}\n🕐 بروزرسانی: {mins} دقیقه پیش | منبع: {USDT_CACHE.get('src', 'مدیریت')}\n<i>🤖 Forexin Bot</i>"
+            return f"🇮🇷 <b>قیمت بازار ایران:</b>\n💵 تتر: {p:,} تومان{gold18_text(p)}\n🕐 بروزرسانی: {mins} دقیقه پیش | منبع: {USDT_CACHE.get('src', 'مدیریت')}\n<i>🤖 Forexin Bot</i>"
     return '⚠️ <b>دریافت قیمت ممکن نشد.</b>\nمدیریت: /usdt قیمت را تنظیم کنید.\n<code>' + html.escape(' | '.join(errs)[:200]) + '</code>'
 
 def news_today():
