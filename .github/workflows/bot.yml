@@ -2,12 +2,19 @@ name: bot
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "0 3 * * *"
+concurrency:
+  group: bot-single
+  cancel-in-progress: false
+permissions:
+  actions: write
 jobs:
   run:
     runs-on: ubuntu-latest
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -16,4 +23,6 @@ jobs:
       - name: deps
         run: pip install -q pyTelegramBotAPI yt-dlp requests
       - name: run bot
-        run: timeout 295 python bot2.py || true
+        run: |
+          timeout 320m python bot2.py || true
+          curl -s -X POST -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$GH_REPO/actions/workflows/bot.yml/dispatches" -d '{"ref":"main"}' || true
