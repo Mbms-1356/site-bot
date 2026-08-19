@@ -20,8 +20,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - name: deps
-        run: pip install -q pyTelegramBotAPI yt-dlp requests
+        run: pip install -q pyTelegramBotAPI yt-dlp requests bgutil-ytdlp-pot-provider
       - name: run bot
         run: |
           timeout 320m python bot2.py || true
