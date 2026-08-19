@@ -174,7 +174,7 @@ WELCOME_GROUP = '''سلام {first} عزیز! 🌟
 
 ⚠️ مطالب آموزشی | 🚫 لینک/تبلیغ ممنوع.'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨', 'CHF': '🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -286,7 +286,7 @@ def get_usdt_only():
     if results:
         name, p = results[0]
         save_usdt_cache(p, name)
-        return f"🇮🇷 <b>قیمت لحظه‌ای بازار ایران:</b>\n🪙 تتر: {p:,} تومان{gold18_text(p)}\n🏦 منبع: {name}\n<i>🤖 Forexin Bot</i>"
+        return f"🇮 <b>قیمت لحظه‌ای بازار ایران:</b>\n🪙 تتر: {p:,} تومان{gold18_text(p)}\n🏦 منبع: {name}\n<i>🤖 Forexin Bot</i>"
     if USDT_CACHE.get('price'):
         age = int(_t.time()) - USDT_CACHE.get('ts', 0)
         if age < 24 * 3600:
@@ -315,22 +315,48 @@ def news_today():
     except Exception: pass
     return None
 
-def tiktok_dl(u):
+def tiktok_full(u):
     q = urllib.parse.quote(u, safe='')
     try:
         r = requests.get('https://www.tikwm.com/api/?hd=1&url=' + q, headers={'User-Agent': UA}, timeout=20)
         res = r.json()
-        if res.get('code') == 0: return res['data']
+        if res.get('code') == 0:
+            vd = res['data']
+            vurl = vd.get('hdplay') or vd.get('play')
+            if vurl and not vurl.startswith('http'): vurl = 'https://tikwm.com' + vurl
+            return requests.get(vurl, timeout=30, headers={'User-Agent': UA}).content, (vd.get('title') or 'TikTok')[:50]
     except Exception: pass
     try:
         r = requests.post('https://tikwm.com/api/', data={'url': u, 'hd': 1}, headers={'User-Agent': UA}, timeout=20)
         res = r.json()
-        if res.get('code') == 0: return res['data']
+        if res.get('code') == 0:
+            vd = res['data']
+            vurl = vd.get('hdplay') or vd.get('play')
+            if vurl and not vurl.startswith('http'): vurl = 'https://tikwm.com' + vurl
+            return requests.get(vurl, timeout=30, headers={'User-Agent': UA}).content, (vd.get('title') or 'TikTok')[:50]
     except Exception: pass
-    raise Exception('tiktok failed')
+    try:
+        r = requests.get('https://api.tiklydown.eu.org/api/download?url=' + q, timeout=20)
+        d = r.json()
+        v = d.get('video')
+        if v and v.get('playback'):
+            return requests.get(v['playback'], timeout=60, headers={'User-Agent': UA}).content, (d.get('title') or 'TikTok')[:50]
+    except Exception: pass
+    try:
+        sess = requests.Session()
+        sess.headers.update({'User-Agent': UA, 'Referer': 'https://ttsave.app/'})
+        r = sess.post('https://ttsave.app/download', data={'id': u, 'locale': 'en'}, timeout=20)
+        m = re.search(r'(https?://[^"\s]+\.mp4[^"\s]*)', r.text)
+        if not m:
+            m = re.search(r'href="(https?://[^"]+)"[^>]*>[^<]*[Dd]ownload', r.text)
+        if m:
+            data = sess.get(m.group(1), timeout=60).content
+            if len(data) > 50000:
+                return data, 'TikTok'
+    except Exception: pass
+    return yt_dl(u)
 
 def insta_dl_multi(url):
-    """Try multiple Instagram download services"""
     services = [
         ('igram.world', 'https://igram.world/api/ajaxSearch', {'q': url, 't': 'media'}),
         ('saveig.app', 'https://saveig.app/api/ajaxSearch', {'q': url, 't': 'media'}),
@@ -355,8 +381,67 @@ def insta_dl_multi(url):
             continue
     raise Exception('all insta services failed')
 
+def yt_id(u):
+    m = re.search(r'(?:v=|youtu\.be/|shorts/|embed/)([\w-]{11})', u)
+    return m.group(1) if m else None
+
+PIPED = ['https://pipedapi.kavin.rocks', 'https://pipedapi.adminforge.de', 'https://pipedapi.reallyaweso.me']
+
+def piped_dl(u):
+    vid = yt_id(u)
+    if not vid: raise Exception('no id')
+    for base in PIPED:
+        try:
+            d = requests.get(base + '/streams/' + vid, headers={'User-Agent': UA}, timeout=10).json()
+            streams = d.get('videoStreams') or []
+            best = None
+            for s in streams:
+                if '720' in (s.get('quality') or ''): best = s; break
+            if not best and streams: best = streams[-1]
+            if best and best.get('url'):
+                data = requests.get(best['url'], timeout=90, headers={'User-Agent': UA}).content
+                if len(data) > 100000:
+                    return data, (d.get('title') or 'YouTube')[:50]
+        except Exception: continue
+    raise Exception('piped failed')
+
+INVIDIOUS = ['https://inv.nadeko.net', 'https://invidious.f5.si', 'https://y.com.sb', 'https://iv.melmac.space']
+
+def invidious_dl(u):
+    vid = yt_id(u)
+    if not vid: raise Exception('no id')
+    for base in INVIDIOUS:
+        try:
+            d = requests.get(base + '/api/v1/videos/' + vid, headers={'User-Agent': UA}, timeout=10).json()
+            fmts = d.get('formatStreams') or []
+            if not fmts: continue
+            best = fmts[0]
+            for f in fmts:
+                if '720' in (f.get('qualityLabel') or ''): best = f; break
+            data = requests.get(best['url'], timeout=90, headers={'User-Agent': UA}).content
+            if len(data) > 100000:
+                return data, (d.get('title') or 'YouTube')[:50]
+        except Exception: continue
+    raise Exception('invidious failed')
+
+def ssyoutube_dl(url):
+    try:
+        ss_url = url.replace('youtube.com', 'ssyoutube.com').replace('youtu.be', 'ssyoutube.com/watch?v=')
+        sess = requests.Session()
+        sess.headers.update({'User-Agent': UA})
+        page = sess.get(ss_url, timeout=20, allow_redirects=True).text
+        links = re.findall(r'href="(https?://[^"]+)"[^>]*>.*?(?:720p|HD|Download)', page, re.I)
+        if not links:
+            links = re.findall(r'href="(https?://[^"]+\.mp4[^"]*)"', page, re.I)
+        if links:
+            data = sess.get(links[0], timeout=90).content
+            if len(data) > 100000:
+                return data, 'YouTube Video'
+        raise Exception('no link')
+    except Exception as e:
+        raise Exception(f'ssyoutube: {str(e)[:40]}')
+
 def yt_dl(url):
-    """YouTube download with PO Token support (if installed)"""
     opts = {
         'outtmpl': os.path.join(DL_DIR, '%(id)s.%(ext)s'),
         'format': 'best[height<=720]/best',
@@ -379,18 +464,23 @@ def handle_download(m, url):
     def job():
         try:
             if 'tiktok.com' in url:
-                vd = tiktok_dl(url)
-                vurl = vd.get('hdplay') or vd.get('play')
-                if vurl and not vurl.startswith('http'): vurl = 'https://tikwm.com' + vurl
-                data = requests.get(vurl, timeout=30, headers={'User-Agent': UA}).content
-                title = (vd.get('title') or 'TikTok')[:50]
+                data, title = tiktok_full(url)
             elif 'instagram.com' in url:
                 try:
                     data, title = insta_dl_multi(url)
-                except Exception as e:
+                except Exception:
                     data, title = yt_dl(url)
             else:
-                data, title = yt_dl(url)
+                try:
+                    data, title = piped_dl(url)
+                except Exception:
+                    try:
+                        data, title = invidious_dl(url)
+                    except Exception:
+                        try:
+                            data, title = ssyoutube_dl(url)
+                        except Exception:
+                            data, title = yt_dl(url)
             if len(data) > 48*1024*1024:
                 bot.send_message(m.chat.id, '⚠️ فایل سنگین است.')
             else:
@@ -405,11 +495,11 @@ def handle_download(m, url):
         except Exception as e:
             err = str(e)
             if 'instagram.com' in url:
-                msg = f'❌ اینستاگرام این ویدیو را نمی‌دهد.\n💡 از <code>igram.world</code> به‌صورت دستی استفاده کنید.\n<code>{html.escape(err[:80])}</code>'
+                msg = f'❌ اینستاگرام این ویدیو را نمی‌دهد.\n💡 از <code>igram.world</code> دستی استفاده کنید.\n<code>{html.escape(err[:80])}</code>'
             elif 'youtube.com' in url or 'youtu.be' in url:
-                msg = f'❌ یوتیوب این ویدیو را نمی‌دهد.\n💡 از <code>ssyoutube.com</code> به‌صورت دستی استفاده کنید.\n<code>{html.escape(err[:80])}</code>'
+                msg = f'❌ یوتیوب این ویدیو را نمی‌دهد.\n💡 از <code>ssyoutube.com</code> دستی استفاده کنید.\n<code>{html.escape(err[:80])}</code>'
             else:
-                msg = f'❌ دانلود ناموفق.\n<code>{html.escape(err[:100])}</code>'
+                msg = f'❌ دانلود ناموفق.\n💡 تیک‌تاک: <code>snaptik.app</code>\n<code>{html.escape(err[:100])}</code>'
             bot.send_message(m.chat.id, msg)
             try: bot.delete_message(m.chat.id, wait.message_id)
             except Exception: pass
@@ -572,7 +662,7 @@ def txt(m):
             try:
                 bot.ban_chat_member(m.chat.id, uid)
                 block_user(uid)
-                bot.send_message(m.chat.id, f'⛔ کاربر بن شد و در بلاک‌لیست دائمی قرار گرفت.')
+                bot.send_message(m.chat.id, '⛔ کاربر بن شد و در بلاک‌لیست دائمی قرار گرفت.')
             except Exception: pass
         return
 
