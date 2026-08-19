@@ -34,6 +34,7 @@ ADMIN_FILE = 'admin.json'
 GROUP_FILE = 'group_id.txt'
 INVITE_FILE = 'invites.json'
 CACHE_FILE = 'usdt_cache.json'
+BLOCK_FILE = 'blocklist.json'
 DL_DIR = 'dl'
 os.makedirs(DL_DIR, exist_ok=True)
 
@@ -57,6 +58,11 @@ try:
     with open(CACHE_FILE) as f: USDT_CACHE = json.load(f)
 except Exception: pass
 
+BLOCKLIST = set()
+try:
+    with open(BLOCK_FILE) as f: BLOCKLIST = set(json.load(f))
+except Exception: pass
+
 def save_invites():
     try:
         with open(INVITE_FILE, 'w') as f: json.dump(INVITES, f)
@@ -68,6 +74,18 @@ def save_usdt_cache(p, src):
     try:
         with open(CACHE_FILE, 'w') as f: json.dump(USDT_CACHE, f)
     except Exception: pass
+
+def save_blocklist():
+    try:
+        with open(BLOCK_FILE, 'w') as f: json.dump(list(BLOCKLIST), f)
+    except Exception: pass
+
+def block_user(uid):
+    BLOCKLIST.add(int(uid))
+    save_blocklist()
+
+def is_blocked(uid):
+    return int(uid) in BLOCKLIST
 
 def save_group(gid):
     global GROUP_ID
@@ -117,51 +135,46 @@ QUOTES = [
 
 GLOSS = {
     'lat': 'لات: واحد حجم معامله؛ ۱ لات = ۱۰۰ واحد ارز پایه.',
-    'pip': 'پیپ: کوچک‌ترین واحد تغییر قیمت (معمولاً رقم چهارم اعشار).',
-    'stop': 'استاپ: سفارش محدودکنندهٔ ضرر (Stop Loss).',
-    'ahrom': 'اهرم: سرمایهٔ قرضی از بروکر برای بزرگ‌تر کردن معامله.',
+    'pip': 'پیپ: کوچک‌ترین واحد تغییر قیمت.',
+    'stop': 'استاپ: سفارش محدودکنندهٔ ضرر.',
+    'ahrom': 'اهرم: سرمایهٔ قرضی از بروکر.',
     'spread': 'اسپرد: فاصلهٔ بین قیمت خرید و فروش.',
     'target': 'تارگت: هدف سود معامله.',
-    'session': 'سشن: بازهٔ زمانی فعالیت بازار (لندن/نیویورک).',
-    'candle': 'کندل: نمایش قیمت باز/بسته/بالا/پایین در یک بازه.',
-    'pattern': 'پترن: الگوی تکرارشوندهٔ قیمتی در چارت.',
-    'lit': 'LIT: استراتژی اختصاصی آکادمی فارکسین ترک اصلانی.',
-    'vip': 'VIP: کانال ویژهٔ سیگنال‌های آکادمی.'
+    'session': 'سشن: بازهٔ زمانی فعالیت بازار.',
+    'candle': 'کندل: نمایش قیمت در یک بازه.',
+    'pattern': 'پترن: الگوی تکرارشوندهٔ قیمتی.',
+    'lit': 'LIT: استراتژی فارکسین ترک اصلانی.',
+    'vip': 'VIP: کانال ویژهٔ سیگنال‌ها.'
 }
 
-BASE_GUIDE = '''📌 راهنمای کامل ورود به کانال بیس (آکادمی)
+BASE_GUIDE = '''📌 راهنمای کامل ورود به کانال بیس
 
 🎯 کانال بیس: @Forexin_Turkaslani_Base
-آکادمی عملی: آموزش استراتژی LIT، کار با صرافی و بروکر، مدیریت سرمایه.
+آکادمی عملی: آموزش استراتژی LIT، مدیریت سرمایه.
 
 🔑 روش ورود (تنها روش):
-1️⃣ ربات رسمی: @TurkaslaniSiteBot و بنویسید /start
-2️⃣ دکمه «🎟️ لینک دعوت» را بزنید؛ لینک اختصاصی شما نمایش داده می‌شود.
+1️⃣ ربات: @TurkaslaniSiteBot و /start
+2️⃣ دکمه «🎟️ لینک دعوت» را بزنید.
 3️⃣ لینک‌تان را برای ۲ دوست بفرستید.
-4️⃣ دوست‌ها با لینک شما عضو کانال رایگان شوند؛ هر عضو موفق = ۱ دعوت.
-5️⃣ بعد از ۲ دعوت واقعی، لینک ورود به کانال بیس خودکار ارسال می‌شود. 🎉
+4️⃣ هر عضو موفق = ۱ دعوت.
+5️⃣ بعد از ۲ دعوت، لینک کانال بیس ارسال می‌شود. 🎉
 
- تیم Forexin Turkaslani'''
+تیم Forexin Turkaslani'''
 
-WELCOME_PRIV = 'سلام! 👋\nمن دستیار فارکسین ترک اصلانی هستم.\n<i>📊 ژورنال معاملاتی | 💰 قیمت لحظه‌ای | 🎬 دانلودر | 📚 آموزش</i>'
+WELCOME_PRIV = 'سلام! 👋\nمن دستیار فارکسین ترک اصلانی هستم.\n<i>📊 ژورنال | 💰 قیمت | 🎬 دانلودر | 📚 آموزش</i>'
 
 WELCOME_GROUP = '''سلام {first} عزیز! 🌟
-به «LIT Community Forexin_Turkaslani» خوش آمدید.
+به «LIT Community» خوش آمدید.
 
-کانال‌های ما:
-1️⃣  کانال سیگنال و لایو (رایگان)
-@forexin_turkaslanifree
-2️⃣  کانال آموزش آکادمی
-@Forexin_Turkaslani_Base
-3️⃣  همین گروه (LIT Community)
-4️⃣ ▶️ یوتیوب
-youtube.com/@Forexin.turkaslani
+کانال‌ها:
+1️⃣ سیگنال: @forexin_turkaslanifree
+2️⃣ آموزش: @Forexin_Turkaslani_Base
+3️⃣ گروه: همین‌جا
+4️⃣ یوتیوب: youtube.com/@Forexin.turkaslani
 
-⚠️ تمام مطالب صرفاً آموزشی‌اند.
-🚫 ارسال لینک و تبلیغ ممنوع (۲ اخطار = مسدودیت).
-با آرزوی سودهای پایدار 📈'''
+⚠️ مطالب آموزشی | 🚫 لینک/تبلیغ ممنوع.'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨', 'CHF': '🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -192,12 +205,14 @@ def fetch_json(url):
     req = urllib.request.Request(url, headers={'User-Agent': UA})
     return json.load(urllib.request.urlopen(req, timeout=6, context=ctx))
 
-def fetch_text(url):
+def fetch_text(url, referer=None):
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    req = urllib.request.Request(url, headers={'User-Agent': UA})
-    return urllib.request.urlopen(req, timeout=8, context=ctx).read().decode('utf-8', 'ignore')
+    headers = {'User-Agent': UA}
+    if referer: headers['Referer'] = referer
+    req = urllib.request.Request(url, headers=headers)
+    return urllib.request.urlopen(req, timeout=10, context=ctx).read().decode('utf-8', 'ignore')
 
 def tehran_now():
     return datetime.now(timezone(timedelta(hours=3, minutes=30)))
@@ -205,7 +220,7 @@ def tehran_now():
 def clean(x):
     s = str(x)
     s = s.translate(str.maketrans({'۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9','٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'}))
-    return int(float(s.replace(',', '').replace('٬', '').replace('،', '')))
+    return int(float(s.replace(',', '').replace('٬', '').replace('،', '').replace(' ', '')))
 
 def get_gold_only():
     try:
@@ -218,7 +233,7 @@ def get_gold_only():
             p = round(float(d['items'][0]['xau_price']), 2)
             return f"🥇 <b>قیمت لحظه‌ای انس جهانی طلا:</b> ${p}\n<i>🤖 Forexin Bot</i>"
         except Exception as e2:
-            return f"🥇 <b>انس طلا:</b> خطا در دریافت\n<code>{html.escape(str(e2)[:80])}</code>"
+            return f"🥇 <b>انس طلا:</b> خطا\n<code>{html.escape(str(e2)[:80])}</code>"
 
 def gold18_text(p):
     try:
@@ -227,19 +242,6 @@ def gold18_text(p):
         return f"\n🥇 طلای ۱۸ عیار: {int(p * ounce / 31.1035 * 0.75):,} تومان/گرم"
     except Exception:
         return ''
-
-def scrape_price(url, pats):
-    body = fetch_text(url)
-    for pat in pats:
-        m = re.search(pat, body, re.S | re.I)
-        if m:
-            try:
-                v = clean(m.group(1))
-                if 1000 < v < 10000000:
-                    return v
-            except Exception:
-                continue
-    raise Exception('parse')
 
 def get_usdt_only():
     results = []
@@ -251,28 +253,48 @@ def get_usdt_only():
                 results.append((name, p))
         except Exception as e:
             errs.append(f"{name}: {str(e)[:25]}")
-    def bonbast_parse(body):
-        d = json.loads(body)
-        src = d.get('usdt') or d.get('usd')
-        return clean(src['sell'])
-    add('بن‌بست', lambda: bonbast_parse(fetch_text('https://bonbast.com/json')))
-    add('بن‌بستPOST', lambda: bonbast_parse(requests.post('https://bonbast.com/json', headers={'User-Agent': UA, 'Referer': 'https://bonbast.com/'}, timeout=6).text))
-    add('تبدیلPOST', lambda: clean(requests.post('https://api1.tabdeal.org/r/api/v1/public/ticker?symbol=USDTIRT', headers={'User-Agent': UA}, timeout=6).json()['data'].get('last') or 0))
-    add('اُم‌فاینکس', lambda: scrape_price('https://www.ompfinex.com/markets/usdt-price', [r'usdt[^0-9۰-٩]{0,400}([۰-٩0-9][۰-٩0-9,،٬]{4,9})', r'تتر[^0-9۰-٩]{0,400}([۰-٩0-9][۰-٩0-9,،٬]{4,9})', r'>([۰-٩0-9][۰-٩0-9,،٬]{5,9})<']))
-    add('نوبیتکس', lambda: scrape_price('https://nobitex.ir/price/usdt/', [r'usdt[^0-9۰-٩]{0,400}([۰-٩0-9][۰-٩0-9,،٬]{4,9})', r'تتر[^0-9۰-٩]{0,400}([۰-٩0-9][۰-٩0-9,،٬]{4,9})', r'>([۰-٩0-9][۰-٩0-9,،٬]{5,9})<']))
-    add('تبدیل', lambda: scrape_price('https://tabdeal.org/usdt-price', [r'usdt[^0-9۰-٩]{0,400}([۰-٩0-9][۰-٩0-9,،٬]{4,9})', r'تتر[^0-9۰-٩]{0,400}([۰-٩0-9][۰-٩0-9,،٬]{4,9})', r'>([۰-٩0-9][۰-٩0-9,،٬]{5,9})<']))
-    add('جینا', lambda: bonbast_parse(fetch_text('https://r.jina.ai/https://bonbast.com/json')))
+    def scrape_tabdeal():
+        body = fetch_text('https://tabdeal.org/usdt-price', referer='https://tabdeal.org/')
+        # Look for price patterns - try multiple regex
+        for pat in [r'USDT[^0-9]{0,200}?([0-9][0-9,]{4,8})\s*(?:تومان|ریال|IRT|T)',
+                    r'تتر[^0-9]{0,200}?([0-9][0-9,]{4,8})\s*(?:تومان|ریال)',
+                    r'>([0-9][0-9,]{5,9})<',
+                    r'"price"\s*:\s*"?([0-9]+)"?']:
+            m = re.search(pat, body, re.S | re.I)
+            if m:
+                v = clean(m.group(1))
+                if 50000 < v < 500000:  # reasonable range for USDT in IRR (not 10x)
+                    return v
+        raise Exception('parse')
+    def scrape_omp():
+        body = fetch_text('https://www.ompfinex.com/markets/usdt-price', referer='https://www.ompfinex.com/')
+        for pat in [r'>([0-9][0-9,]{5,9})<', r'"price"\s*:\s*"?([0-9]+)"?']:
+            m = re.search(pat, body, re.S | re.I)
+            if m:
+                v = clean(m.group(1))
+                if 50000 < v < 500000:
+                    return v
+        raise Exception('parse')
+    add('تبدیل', scrape_tabdeal)
+    add('اُم‌فاینکس', scrape_omp)
+    try:
+        d = requests.post('https://api.tabdeal.org/api/v1/market/ticker?symbol=USDTIRT', headers={'User-Agent': UA}, timeout=6).json()
+        p = clean(d.get('data', {}).get('last') or d.get('last') or 0)
+        if 50000 < p < 500000:
+            results.append(('تبدیلAPI', p))
+    except Exception as e:
+        errs.append(f"تبدیلAPI: {str(e)[:25]}")
     if results:
         name, p = results[0]
         save_usdt_cache(p, name)
         return f"🇮🇷 <b>قیمت لحظه‌ای بازار ایران:</b>\n🪙 تتر: {p:,} تومان{gold18_text(p)}\n🏦 منبع: {name}\n<i>🤖 Forexin Bot</i>"
     if USDT_CACHE.get('price'):
         age = int(_t.time()) - USDT_CACHE.get('ts', 0)
-        if age < 12 * 3600:
+        if age < 24 * 3600:
             p = USDT_CACHE['price']
             mins = max(1, age // 60)
             return f"🇮🇷 <b>قیمت بازار ایران:</b>\n🪙 تتر: {p:,} تومان{gold18_text(p)}\n🕐 بروزرسانی: {mins} دقیقه پیش | منبع: {USDT_CACHE.get('src', 'مدیریت')}\n<i>🤖 Forexin Bot</i>"
-    return '⚠️ <b>دریافت قیمت لحظه‌ای ممکن نشد.</b>\nمدیریت: با دستور /usdt قیمت را تنظیم کنید.\n<code>' + html.escape(' | '.join(errs)[:200]) + '</code>'
+    return '⚠️ <b>دریافت قیمت ممکن نشد.</b>\nمدیریت: /usdt قیمت را تنظیم کنید.\n<code>' + html.escape(' | '.join(errs)[:200]) + '</code>'
 
 def news_today():
     try:
@@ -280,21 +302,17 @@ def news_today():
         now = tehran_now()
         lines = []
         for ev in d:
-            if ev.get('impact') != 'High':
-                continue
+            if ev.get('impact') != 'High': continue
             try:
                 dt = datetime.fromisoformat(ev['date'].replace('Z', '+00:00'))
-            except Exception:
-                continue
+            except Exception: continue
             dt_ir = dt.astimezone(timezone(timedelta(hours=3, minutes=30)))
-            if dt_ir.date() != now.date():
-                continue
+            if dt_ir.date() != now.date(): continue
             flag = FLAGS.get(ev.get('country', ''), '🌐')
-            lines.append(f"{flag} <b>{ev['title']}</b>\n⏰ ساعت {dt_ir.strftime('%H:%M')} به وقت ایران")
-            if len(lines) >= 8:
-                break
+            lines.append(f"{flag} <b>{ev['title']}</b>\n⏰ {dt_ir.strftime('%H:%M')}")
+            if len(lines) >= 8: break
         if lines:
-            return "📅 <b>تقویم اقتصادی امروز (اخبار پرقدرت):</b>\n\n" + "\n\n".join(lines) + "\n\n<i>منبع: ForexFactory | ساعت‌ها به وقت ایران</i>"
+            return "📅 <b>تقویم امروز:</b>\n\n" + "\n\n".join(lines)
     except Exception: pass
     return None
 
@@ -303,51 +321,78 @@ def tiktok_dl(u):
     try:
         r = requests.get('https://www.tikwm.com/api/?hd=1&url=' + q, headers={'User-Agent': UA}, timeout=20)
         res = r.json()
-        if res.get('code') == 0:
-            return res['data']
+        if res.get('code') == 0: return res['data']
     except Exception: pass
     try:
         r = requests.post('https://tikwm.com/api/', data={'url': u, 'hd': 1}, headers={'User-Agent': UA}, timeout=20)
         res = r.json()
-        if res.get('code') == 0:
-            return res['data']
+        if res.get('code') == 0: return res['data']
     except Exception: pass
+    raise Exception('tiktok failed')
+
+def snapinsta_dl(url):
+    """Auto-scrape snapinsta.app to get Instagram video"""
     try:
-        r = requests.get('https://api.tiklydown.eu.org/api/download?url=' + q, timeout=20)
-        d = r.json()
-        v = d.get('video')
-        if v and v.get('playback'):
-            return {'play': v['playback'], 'hdplay': v['playback'], 'title': d.get('title', 'TikTok')}
-    except Exception: pass
-    raise Exception('tiktok all sources failed')
+        # Step 1: Get the page to extract any tokens
+        sess = requests.Session()
+        sess.headers.update({'User-Agent': UA, 'Referer': 'https://snapinsta.app/'})
+        page = sess.get('https://snapinsta.app/', timeout=15).text
+        # Step 2: POST to their API endpoint
+        data = {'url': url, 'lang_code': 'en', 'token': ''}
+        # Find token in page if exists
+        tm = re.search(r'name="token"\s+value="([^"]+)"', page)
+        if tm: data['token'] = tm.group(1)
+        r = sess.post('https://snapinsta.app/action', data=data, timeout=20)
+        res = r.json() if r.text.startswith('{') else json.loads(re.search(r'\{.*\}', r.text, re.S).group(0))
+        html_content = res.get('html') or res.get('data') or ''
+        # Extract video URL from HTML
+        vm = re.search(r'href="(https?://[^"]+)"[^>]*>Download', html_content)
+        if vm:
+            vurl = vm.group(1)
+            data = sess.get(vurl, timeout=60).content
+            return data, 'Instagram Video'
+        raise Exception('no download link')
+    except Exception as e:
+        raise Exception(f'snapinsta: {str(e)[:40]}')
 
-def yt_id(u):
-    m = re.search(r'(?:v=|youtu\.be/|shorts/|embed/)([\w-]{11})', u)
-    return m.group(1) if m else None
+def ssyoutube_dl(url):
+    """Auto-scrape ssyoutube.com to get YouTube video"""
+    try:
+        # Replace youtube.com with ssyoutube.com
+        ss_url = url.replace('youtube.com', 'ssyoutube.com').replace('youtu.be', 'ssyoutube.com/watch?v=')
+        sess = requests.Session()
+        sess.headers.update({'User-Agent': UA})
+        page = sess.get(ss_url, timeout=20, allow_redirects=True).text
+        # Find download links
+        links = re.findall(r'href="(https?://[^"]+)"[^>]*>.*?(?:720p|HD|Download)', page, re.I)
+        if not links:
+            links = re.findall(r'href="(https?://[^"]+\.mp4[^"]*)"', page, re.I)
+        if links:
+            vurl = links[0]
+            data = sess.get(vurl, timeout=90).content
+            return data, 'YouTube Video'
+        raise Exception('no link')
+    except Exception as e:
+        raise Exception(f'ssyoutube: {str(e)[:40]}')
 
-PIPED = ['https://pipedapi.kavin.rocks', 'https://pipedapi.adminforge.de', 'https://pipedapi.reallyaweso.me', 'https://api.piped.private.coffee']
+PIPED = ['https://pipedapi.kavin.rocks', 'https://pipedapi.adminforge.de', 'https://pipedapi.reallyaweso.me']
 
 def piped_dl(u):
-    vid = yt_id(u)
-    if not vid:
-        raise Exception('no id')
+    vid = re.search(r'(?:v=|youtu\.be/|shorts/|embed/)([\w-]{11})', u)
+    if not vid: raise Exception('no id')
     for base in PIPED:
         try:
-            d = requests.get(base + '/streams/' + vid, headers={'User-Agent': UA}, timeout=10).json()
+            d = requests.get(base + '/streams/' + vid.group(1), headers={'User-Agent': UA}, timeout=10).json()
             streams = d.get('videoStreams') or []
             best = None
             for s in streams:
-                if '720' in (s.get('quality') or ''):
-                    best = s
-                    break
-            if not best and streams:
-                best = streams[-1]
+                if '720' in (s.get('quality') or ''): best = s; break
+            if not best and streams: best = streams[-1]
             if best and best.get('url'):
                 data = requests.get(best['url'], timeout=90, headers={'User-Agent': UA}).content
                 if len(data) > 100000:
                     return data, (d.get('title') or 'YouTube')[:50]
-        except Exception:
-            continue
+        except Exception: continue
     raise Exception('piped failed')
 
 def yt_dl(url):
@@ -363,52 +408,61 @@ def yt_dl(url):
     with yt_dlp.YoutubeDL(opts) as y:
         info = y.extract_info(url, download=True)
         fn = y.prepare_filename(info)
-    with open(fn, 'rb') as f:
-        data = f.read()
+    with open(fn, 'rb') as f: data = f.read()
     title = info.get('title', 'Video')[:50]
     try: os.remove(fn)
     except Exception: pass
     return data, title
 
 def handle_download(m, url):
-    wait = bot.send_message(m.chat.id, '⏳ <b>در حال دانلود... صبر کنید!</b>')
+    wait = bot.send_message(m.chat.id, '⏳ <b>در حال دانلود...</b>')
     def job():
         try:
             if 'tiktok.com' in url:
                 vd = tiktok_dl(url)
                 vurl = vd.get('hdplay') or vd.get('play')
-                if vurl and not vurl.startswith('http'):
-                    vurl = 'https://tikwm.com' + vurl
+                if vurl and not vurl.startswith('http'): vurl = 'https://tikwm.com' + vurl
                 data = requests.get(vurl, timeout=30, headers={'User-Agent': UA}).content
-                title = (vd.get('title') or 'TikTok Video')[:50]
+                title = (vd.get('title') or 'TikTok')[:50]
+            elif 'instagram.com' in url:
+                # Try snapinsta first, then yt-dlp
+                try:
+                    data, title = snapinsta_dl(url)
+                except Exception as e1:
+                    try:
+                        data, title = yt_dl(url)
+                    except Exception as e2:
+                        raise Exception(f'{str(e1)} | {str(e2)[:40]}')
             elif 'youtube.com' in url or 'youtu.be' in url:
+                # Try piped, then ssyoutube, then yt-dlp
                 try:
                     data, title = piped_dl(url)
                 except Exception:
-                    data, title = yt_dl(url)
+                    try:
+                        data, title = ssyoutube_dl(url)
+                    except Exception:
+                        data, title = yt_dl(url)
             else:
                 data, title = yt_dl(url)
             if len(data) > 48*1024*1024:
-                bot.send_message(m.chat.id, '⚠️ فایل سنگین‌تر از ۴۸MB است و قابل ارسال نیست.')
+                bot.send_message(m.chat.id, '⚠️ فایل سنگین است.')
             else:
                 fp = os.path.join(DL_DIR, 'send.mp4')
-                with open(fp, 'wb') as f:
-                    f.write(data)
+                with open(fp, 'wb') as f: f.write(data)
                 with open(fp, 'rb') as f:
-                    bot.send_video(m.chat.id, f, caption=f"<b>{title}</b>\n<i>🤖 Forexin Downloader</i>", supports_streaming=True)
+                    bot.send_video(m.chat.id, f, caption=f"<b>{title}</b>\n<i>🤖 Forexin</i>", supports_streaming=True)
                 try: os.remove(fp)
                 except Exception: pass
             try: bot.delete_message(m.chat.id, wait.message_id)
             except Exception: pass
         except Exception as e:
             err = str(e)
-            low = err.lower()
-            if 'instagram.com' in url and ('login' in low or 'sign in' in low or 'no video formats' in low):
-                msg = '❌ اینستاگرام این ویدیو را فقط با لاگین می‌دهد.\n💡 از <code>snapinsta.app</code> استفاده کنید یا لینک Reels عمومی دیگری بفرستید.'
+            if 'instagram.com' in url:
+                msg = f'❌ اینستاگرام این ویدیو را نمی‌دهد (نیاز به لاگین).\n💡 از <code>snapinsta.app</code> به‌صورت دستی استفاده کنید.\n<code>{html.escape(err[:80])}</code>'
             elif 'youtube.com' in url or 'youtu.be' in url:
-                msg = f"❌ یوتیوب موقتاً سرور را مسدود کرد.\n💡 چند دقیقه بعد دوباره امتحان کنید یا از <code>ssyoutube.com</code> استفاده کنید.\n<code>{html.escape(err[:80])}</code>"
+                msg = f'❌ یوتیوب این ویدیو را نمی‌دهد (بررسی ربات).\n💡 از <code>ssyoutube.com</code> به‌صورت دستی استفاده کنید.\n<code>{html.escape(err[:80])}</code>'
             else:
-                msg = f"❌ دانلود ناموفق بود.\n💡 تیک‌تاک: <code>snaptik.app</code> | اینستا: <code>snapinsta.app</code>\n<code>{html.escape(err[:100])}</code>"
+                msg = f'❌ دانلود ناموفق.\n<code>{html.escape(err[:100])}</code>'
             bot.send_message(m.chat.id, msg)
             try: bot.delete_message(m.chat.id, wait.message_id)
             except Exception: pass
@@ -430,8 +484,14 @@ def new_member(m):
         save_group(m.chat.id)
     for u in m.new_chat_members:
         if not u.is_bot:
+            if is_blocked(u.id):
+                try:
+                    bot.ban_chat_member(m.chat.id, u.id)
+                    bot.send_message(m.chat.id, f'⛔ <b>{u.first_name}</b> قبلاً بن شده بود؛ دوباره حذف شد.')
+                except Exception: pass
+                continue
             try:
-                bot.send_message(m.chat.id, WELCOME_GROUP.format(first=u.first_name or 'دوست عزیز'), reply_markup=group_menu())
+                bot.send_message(m.chat.id, WELCOME_GROUP.format(first=u.first_name or 'دوست'), reply_markup=group_menu())
             except Exception: pass
 
 @bot.message_handler(commands=['start'])
@@ -464,7 +524,7 @@ def cb(c):
             else:
                 bot.send_message(chat, WELCOME_PRIV, reply_markup=build_menu())
         elif d == 'inv':
-            bot.send_message(chat, f"🎁 <b>لینک‌های مفید:</b>\n🤖 ربات اصلی: {MAINBOT}\n📢 کانال سیگنال: @forexin_turkaslanifree\n🎓 کانال بیس: @Forexin_Turkaslani_Base\n💬 گروه: @forexinturkaslanilitcommuniti")
+            bot.send_message(chat, f"🎁 <b>لینک‌های مفید:</b>\n🤖 {MAINBOT}\n📢 @forexin_turkaslanifree\n🎓 @Forexin_Turkaslani_Base\n💬 @forexinturkaslanilitcommuniti")
         elif d == 'gold':
             bot.send_message(chat, get_gold_only())
         elif d == 'usdt':
@@ -472,9 +532,9 @@ def cb(c):
         elif d == 'dl':
             bot.send_message(chat, '🎬 <b>لینک ویدیو را بفرستید:</b>\n(یوتیوب، اینستاگرام، تیک‌تاک)')
         elif d == 'rules':
-            bot.send_message(chat, '📜 <b>قوانین گروه:</b>\n۱. احترام متقابل\n۲. عدم تبلیغ و اسپم\n۳. فقط مباحث ترید و آموزشی\n۴. ارسال لینک = حذف + اخطار (۲ اخطار = مسدودیت)')
+            bot.send_message(chat, '📜 <b>قوانین:</b>\n۱. احترام\n۲. بدون تبلیغ\n۳. فقط مباحث ترید\n۴. لینک = ۲ اخطار = بن دائمی')
         elif d == 'code':
-            bot.send_message(chat, '🎟️ <b>کد VIP خود را وارد کنید:</b>')
+            bot.send_message(chat, '🎟️ <b>کد VIP را وارد کنید:</b>')
         elif d == 'faq':
             mk = types.InlineKeyboardMarkup(row_width=2)
             mk.add(types.InlineKeyboardButton('لات', callback_data='gloss_lat'), types.InlineKeyboardButton('پیپ', callback_data='gloss_pip'))
@@ -483,49 +543,51 @@ def cb(c):
             mk.add(types.InlineKeyboardButton('سشن', callback_data='gloss_session'), types.InlineKeyboardButton('کندل', callback_data='gloss_candle'))
             mk.add(types.InlineKeyboardButton('پترن', callback_data='gloss_pattern'), types.InlineKeyboardButton('LIT', callback_data='gloss_lit'))
             mk.add(types.InlineKeyboardButton('VIP', callback_data='gloss_vip'))
-            bot.send_message(chat, '❓ <b>یکی را انتخاب کن:</b>', reply_markup=mk)
+            bot.send_message(chat, '❓ <b>انتخاب کن:</b>', reply_markup=mk)
         elif d.startswith('gloss_'):
             bot.send_message(chat, GLOSS.get(d[6:], '❓'))
         elif d == 'fb':
-            bot.send_message(chat, '💬 <b>بازخورد خود را بنویسید تا به مدیریت برسد:</b>')
+            bot.send_message(chat, '💬 <b>بازخورد خود را بنویسید.</b>')
         elif d == 'base':
             bot.send_message(chat, BASE_GUIDE)
         elif d == 'invite':
             rec = INVITES.setdefault(str(uid), {'count': 0, 'ok': False})
             if rec.get('ok'):
-                bot.send_message(chat, '✅ دسترسی شما فعال است!\n🎓 کانال بیس: @Forexin_Turkaslani_Base')
+                bot.send_message(chat, '✅ دسترسی فعال!\n🎓 @Forexin_Turkaslani_Base')
             else:
                 if not rec.get('link'):
                     try:
                         rec['link'] = bot.create_chat_invite_link(FREE_CHANNEL, name=str(uid)).invite_link
                         save_invites()
                     except Exception as e:
-                        bot.send_message(chat, f"❌ ساخت لینک ناموفق بود؛ ربات باید در کانال ادمین باشد.\n<code>{html.escape(str(e)[:80])}</code>")
-                        bot.answer_callback_query(c.id)
-                        return
-                bot.send_message(chat, f"🎁 <b>لینک دعوت شخصی شما:</b>\n<code>{rec['link']}</code>\n\nآن را برای ۲ دوست بفرستید. هر عضو موفق = ۱ دعوت.\n📊 فعلی: {rec.get('count', 0)} از ۲")
+                        bot.send_message(chat, f"❌ خطا: <code>{html.escape(str(e)[:80])}</code>")
+                        bot.answer_callback_query(c.id); return
+                bot.send_message(chat, f"🎁 <b>لینک دعوت شما:</b>\n<code>{rec['link']}</code>\n📊 {rec.get('count', 0)} از ۲")
         elif d == 'tr':
-            bot.send_message(chat, '📊 برای ثبت معامله (فقط ادمین):\n/trade ورود استاپ تارگت')
+            bot.send_message(chat, '📊 (ادمین) /trade ورود استاپ تارگت')
         elif d == 'rp':
             wins = len([x for x in TRADES if x.get('result') == 'win'])
             loss = len([x for x in TRADES if x.get('result') == 'loss'])
-            bot.send_message(chat, f"📈 <b>گزارش معاملات:</b>\n✅ برنده: {wins}\n❌ بازنده: {loss}\n📊 کل: {len(TRADES)}")
+            bot.send_message(chat, f"📈 برنده: {wins} | بازنده: {loss}")
         elif d.startswith('w') or d.startswith('l'):
             tid = int(d[1:])
             for x in TRADES:
                 if x.get('id') == tid:
                     x['result'] = 'win' if d.startswith('w') else 'loss'
             save_trades()
-            try: bot.edit_message_reply_markup(chat, c.message.message_id)
-            except Exception: pass
-            bot.answer_callback_query(c.id, '✅ نتیجه ثبت شد')
-            return
+            bot.answer_callback_query(c.id, '✅ ثبت شد'); return
     except Exception: pass
     bot.answer_callback_query(c.id)
 
 @bot.chat_member_handler(func=lambda cm: True)
 def on_member(cm):
     try:
+        # Blocklist check
+        if is_blocked(cm.new_chat_member.user.id):
+            try:
+                bot.ban_chat_member(cm.chat.id, cm.new_chat_member.user.id)
+            except Exception: pass
+            return
         if cm.invite_link is None or cm.new_chat_member.status != 'member':
             return
         link = cm.invite_link.invite_link
@@ -540,9 +602,9 @@ def on_member(cm):
                         bl = bot.create_chat_invite_link(BASE_CHANNEL, member_limit=1).invite_link
                     except Exception:
                         bl = 'https://t.me/Forexin_Turkaslani_Base'
-                    bot.send_message(int(uid), f"🎉 دسترسی باز شد!\n🎓 لینک ورود به کانال بیس:\n{bl}")
+                    bot.send_message(int(uid), f"🎉 دسترسی باز شد!\n🎓 {bl}")
                 else:
-                    bot.send_message(int(uid), f"✅ یک نفر با لینک شما عضو شد! ({rec['count']} از ۲)")
+                    bot.send_message(int(uid), f"✅ یک دعوت! ({rec['count']} از ۲)")
     except Exception: pass
 
 @bot.message_handler(func=lambda m: True)
@@ -550,8 +612,7 @@ def txt(m):
     uid = m.from_user.id
     t = m.text.strip()
     is_grp = m.chat.type in ('group', 'supergroup')
-    if is_grp:
-        save_group(m.chat.id)
+    if is_grp: save_group(m.chat.id)
 
     if is_grp and is_link(t) and not ensure_admin(uid):
         try: bot.delete_message(m.chat.id, m.message_id)
@@ -562,9 +623,10 @@ def txt(m):
             if langc not in WARN_TXT: langc = 'fa'
             bot.send_message(m.chat.id, WARN_TXT[langc].format(n=WARNS[uid]))
         else:
-            try: bot.ban_chat_member(m.chat.id, uid)
-            except Exception: pass
-            try: bot.send_message(m.chat.id, '⛔ کاربر به دلیل تکرار تبلیغ مسدود شد.')
+            try:
+                bot.ban_chat_member(m.chat.id, uid)
+                block_user(uid)
+                bot.send_message(m.chat.id, f'⛔ کاربر بن شد و در بلاک‌لیست دائمی قرار گرفت.')
             except Exception: pass
         return
 
@@ -572,9 +634,35 @@ def txt(m):
         try:
             p = int(float(t.split()[1]))
             save_usdt_cache(p, 'مدیریت')
-            bot.reply_to(m, f"✅ قیمت تتر روی {p:,} تومان تنظیم شد.")
+            bot.reply_to(m, f"✅ قیمت تتر: {p:,}")
         except Exception:
-            bot.reply_to(m, 'فرمت صحیح: /usdt 105000')
+            bot.reply_to(m, '/usdt 105000')
+        return
+
+    if t.startswith('/block') and ensure_admin(uid):
+        try:
+            bid = int(t.split()[1])
+            block_user(bid)
+            bot.reply_to(m, f'✅ کاربر {bid} به بلاک‌لیست اضافه شد.')
+        except Exception:
+            bot.reply_to(m, '/block 123456789')
+        return
+
+    if t.startswith('/unblock') and ensure_admin(uid):
+        try:
+            bid = int(t.split()[1])
+            BLOCKLIST.discard(bid)
+            save_blocklist()
+            bot.reply_to(m, f'✅ کاربر {bid} از بلاک‌لیست حذف شد.')
+        except Exception:
+            bot.reply_to(m, '/unblock 123456789')
+        return
+
+    if t.startswith('/blocklist') and ensure_admin(uid):
+        if not BLOCKLIST:
+            bot.reply_to(m, '📭 بلاک‌لیست خالی است.')
+        else:
+            bot.reply_to(m, f'⛔ بلاک‌لیست ({len(BLOCKLIST)} نفر):\n' + '\n'.join(str(x) for x in list(BLOCKLIST)[:20]))
         return
 
     if not is_grp and any(x in t for x in ['youtube.com', 'youtu.be', 'instagram.com', 'tiktok.com']):
@@ -586,22 +674,15 @@ def txt(m):
         if len(parts) == 4:
             try:
                 e, s, tg = float(parts[1]), float(parts[2]), float(parts[3])
-                rsk, rwd = abs(e-s), abs(tg-e)
-                rr = round(rwd/rsk, 2) if rsk else 0
+                rr = round(abs(tg-e)/abs(e-s), 2) if abs(e-s) else 0
                 tid = len(TRADES) + 1
                 TRADES.append({'id': tid, 'user': uid, 'entry': e, 'stop': s, 'target': tg, 'rr': rr, 'date': tehran_now().strftime('%Y-%m-%d'), 'result': None})
                 save_trades()
                 mk = types.InlineKeyboardMarkup()
                 mk.add(types.InlineKeyboardButton('✅ TP', callback_data=f'w{tid}'), types.InlineKeyboardButton('❌ SL', callback_data=f'l{tid}'))
-                bot.reply_to(m, f"📊 <b>معامله #{tid}</b>\n🎯 ورود: {e}\n🛡️ استاپ: {s}\n🏆 تارگت: {tg}\n💎 R:R = {rr}", reply_markup=mk)
+                bot.reply_to(m, f"📊 <b>#{tid}</b> | R:R={rr}", reply_markup=mk)
             except Exception:
-                bot.reply_to(m, 'فرمت صحیح: /trade ورود استاپ تارگت')
-        return
-
-    if t.startswith('/report') and ensure_admin(uid):
-        wins = len([x for x in TRADES if x.get('result') == 'win'])
-        loss = len([x for x in TRADES if x.get('result') == 'loss'])
-        bot.reply_to(m, f"📈 <b>گزارش:</b>\n✅ {wins} | ❌ {loss}")
+                bot.reply_to(m, '/trade ورود استاپ تارگت')
         return
 
 def notifier():
@@ -619,35 +700,28 @@ def notifier():
                 if hm == (8, 0) and now.strftime('%Y-%m-%d') != last_cal_day:
                     last_cal_day = now.strftime('%Y-%m-%d')
                     n = news_today()
-                    if n:
-                        post_all(n)
-                    else:
-                        post_all('📰 <b>یادآور اخبار اقتصادی:</b>\nتقویم امروز را چک کنید:\nwww.forexfactory.com/calendar')
+                    if n: post_all(n)
                 if hm == (9, 0) and now.strftime('%Y-%m-%d') != last_quote_day:
                     last_quote_day = now.strftime('%Y-%m-%d')
                     q = QUOTES[now.timetuple().tm_yday % len(QUOTES)]
-                    post_all(f"🌟 <b>جملهٔ روز:</b>\n\n💡 {q}\n\n🤖 Forexin Bot")
-                if hm == (9, 30):
-                    post_all('🟠 <b>سشن فرانکفورت باز شد!</b>')
-                if hm == (10, 30):
-                    post_all('🟢 <b>سشن لندن باز شد!</b>\nحجم و نوسان واقعی بازار شروع شد.')
+                    post_all(f"🌟 <b>جملهٔ روز:</b>\n💡 {q}")
+                if hm == (9, 30): post_all('🟠 سشن فرانکفورت')
+                if hm == (10, 30): post_all('🟢 سشن لندن')
                 if hm == (15, 0) and now.strftime('%Y-%m-%d') != last_news_day:
                     last_news_day = now.strftime('%Y-%m-%d')
-                    msg = '📰 <b>قبل از سشن نیویورک:</b>\nاخبار پرقدرت را چک کنید:\nwww.forexfactory.com/calendar'
+                    msg = '📰 قبل از نیویورک: اخبار را چک کنید.'
                     if now.weekday() == 4 and now.day <= 7:
-                        msg += '\n\n⚠️ <b>جمعهٔ اول ماه — روز NFP!</b> نوسان شدید، مراقب باشید!'
+                        msg += '\n⚠️ <b>NFP!</b>'
                     post_all(msg)
-                if hm == (15, 30):
-                    post_all('🟢 <b>سشن نیویورک باز شد!</b>')
-                if hm == (19, 30):
-                    post_all('🔴 <b>سشن لندن بسته شد</b> — نیویورک ادامه دارد.')
+                if hm == (15, 30): post_all('🟢 سشن نیویورک')
+                if hm == (19, 30): post_all('🔴 لندن بسته شد')
         except Exception: pass
         _t.sleep(20)
 
 threading.Thread(target=notifier, daemon=True).start()
 
 if __name__ == '__main__':
-    print('🚀 Bot started in polling mode')
+    print('🚀 Bot started')
     while True:
         try:
             bot.infinity_polling(allowed_updates=['message', 'callback_query', 'chat_member'])
