@@ -174,7 +174,7 @@ WELCOME_GROUP = '''سلام {first} عزیز! 🌟
 
 ⚠️ مطالب آموزشی | 🚫 لینک/تبلیغ ممنوع.'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦', 'CAD': '🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -252,7 +252,27 @@ def get_usdt_only():
             if p and 100000 < p < 400000:
                 results.append((name, p))
         except Exception as e:
-            errs.append(f"{name}: {str(e)[:25]}")
+            errs.append(f"{name}: {str(e)[:30]}")
+    def bonbast():
+        r = requests.post('https://bonbast.com/json', headers={'User-Agent': UA, 'Referer': 'https://bonbast.com/'}, timeout=8)
+        d = json.loads(r.text)
+        if not isinstance(d, dict):
+            raise Exception('notdict')
+        for k in d:
+            kl = k.lower()
+            if 'usdt' in kl or kl == 'usd' or 'tether' in kl:
+                v = d[k]
+                if isinstance(v, dict):
+                    for kk in ('sell', 'buy', 'price', 'last'):
+                        if v.get(kk):
+                            p = clean(v[kk])
+                            if 100000 < p < 400000:
+                                return p
+                else:
+                    p = clean(v)
+                    if 100000 < p < 400000:
+                        return p
+        raise Exception('keys:' + ','.join(list(d.keys())[:6]))
     def toman_regex(body):
         for m in re.finditer(r'([0-9][0-9,]{5,8})\s*تومان', body):
             v = clean(m.group(1))
@@ -291,18 +311,21 @@ def get_usdt_only():
                     v //= 10
                 return v
         return toman_regex(body)
-    def jina(url):
-        return toman_regex(fetch_text('https://r.jina.ai/' + url, timeout=25))
+    def microlink(url):
+        d = json.loads(fetch_text('https://api.microlink.io/?url=' + urllib.parse.quote(url, safe=''), timeout=25))
+        txt = ((d.get('data') or {}).get('text')) or ''
+        return toman_regex(txt)
+    add('بن‌بست', bonbast)
     add('نوبیتکس', nobitex)
-    add('نوبیتکس‌رندر', lambda: jina('https://nobitex.ir/price/usdt/'))
-    add('اُم‌فاینکس‌رندر', lambda: jina('https://www.ompfinex.com/markets/usdt-price'))
+    add('نوبیتکس‌رندر', lambda: microlink('https://nobitex.ir/price/usdt/'))
+    add('اُم‌فاینکس‌رندر', lambda: microlink('https://www.ompfinex.com/markets/usdt-price'))
     try:
         d = requests.post('https://api.tabdeal.org/api/v1/market/ticker?symbol=USDTIRT', headers={'User-Agent': UA}, timeout=6).json()
         p = clean(d.get('data', {}).get('last') or d.get('last') or 0)
         if 100000 < p < 400000:
             results.append(('تبدیل', p))
     except Exception as e:
-        errs.append(f"تبدیل: {str(e)[:25]}")
+        errs.append(f"تبدیل: {str(e)[:30]}")
     if results:
         name, p = results[0]
         save_usdt_cache(p, name)
@@ -313,7 +336,7 @@ def get_usdt_only():
             p = USDT_CACHE['price']
             mins = max(1, age // 60)
             return f"🇮🇷 <b>قیمت بازار ایران:</b>\n💵 تتر: {p:,} تومان{gold18_text(p)}\n🕐 بروزرسانی: {mins} دقیقه پیش | منبع: {USDT_CACHE.get('src', 'مدیریت')}\n<i>🤖 Forexin Bot</i>"
-    return '⚠️ <b>دریافت قیمت ممکن نشد.</b>\nمدیریت: /usdt قیمت را تنظیم کنید.\n<code>' + html.escape(' | '.join(errs)[:200]) + '</code>'
+    return '⚠️ <b>دریافت قیمت ممکن نشد.</b>\nمدیریت: /usdt قیمت را تنظیم کنید.\n<code>' + html.escape(' | '.join(errs)[:250]) + '</code>'
 
 def news_today():
     try:
