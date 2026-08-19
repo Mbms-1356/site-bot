@@ -174,7 +174,7 @@ WELCOME_GROUP = '''سلام {first} عزیز! 🌟
 
 ⚠️ مطالب آموزشی | 🚫 لینک/تبلیغ ممنوع.'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨', 'CHF': '🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -253,36 +253,22 @@ def get_usdt_only():
                 results.append((name, p))
         except Exception as e:
             errs.append(f"{name}: {str(e)[:25]}")
-    def scrape_tabdeal():
-        body = fetch_text('https://tabdeal.org/usdt-price', referer='https://tabdeal.org/')
-        for pat in [r'USDT[^0-9]{0,200}?([0-9][0-9,]{4,8})\s*(?:تومان|ریال|IRT|T)',
-                    r'تتر[^0-9]{0,200}?([0-9][0-9,]{4,8})\s*(?:تومان|ریال)',
-                    r'>([0-9][0-9,]{5,9})<',
-                    r'"price"\s*:\s*"?([0-9]+)"?']:
-            m = re.search(pat, body, re.S | re.I)
-            if m:
-                v = clean(m.group(1))
-                if 50000 < v < 500000:
-                    return v
+    def scrape_first_toman(url):
+        body = fetch_text(url)
+        for m in re.finditer(r'([0-9][0-9,]{4,8})\s*تومان', body):
+            v = clean(m.group(1))
+            if 100000 < v < 400000:
+                return v
         raise Exception('parse')
-    def scrape_omp():
-        body = fetch_text('https://www.ompfinex.com/markets/usdt-price', referer='https://www.ompfinex.com/')
-        for pat in [r'>([0-9][0-9,]{5,9})<', r'"price"\s*:\s*"?([0-9]+)"?']:
-            m = re.search(pat, body, re.S | re.I)
-            if m:
-                v = clean(m.group(1))
-                if 50000 < v < 500000:
-                    return v
-        raise Exception('parse')
-    add('تبدیل', scrape_tabdeal)
-    add('اُم‌فاینکس', scrape_omp)
+    add('نوبیتکس', lambda: scrape_first_toman('https://nobitex.ir/price/usdt/'))
+    add('اُم‌فاینکس', lambda: scrape_first_toman('https://www.ompfinex.com/markets/usdt-price'))
     try:
         d = requests.post('https://api.tabdeal.org/api/v1/market/ticker?symbol=USDTIRT', headers={'User-Agent': UA}, timeout=6).json()
         p = clean(d.get('data', {}).get('last') or d.get('last') or 0)
-        if 50000 < p < 500000:
-            results.append(('تبدیلAPI', p))
+        if 100000 < p < 400000:
+            results.append(('تبدیل', p))
     except Exception as e:
-        errs.append(f"تبدیلAPI: {str(e)[:25]}")
+        errs.append(f"تبدیل: {str(e)[:25]}")
     if results:
         name, p = results[0]
         save_usdt_cache(p, name)
