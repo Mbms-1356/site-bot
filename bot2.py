@@ -255,7 +255,6 @@ def get_usdt_only():
             errs.append(f"{name}: {str(e)[:25]}")
     def scrape_tabdeal():
         body = fetch_text('https://tabdeal.org/usdt-price', referer='https://tabdeal.org/')
-        # Look for price patterns - try multiple regex
         for pat in [r'USDT[^0-9]{0,200}?([0-9][0-9,]{4,8})\s*(?:تومان|ریال|IRT|T)',
                     r'تتر[^0-9]{0,200}?([0-9][0-9,]{4,8})\s*(?:تومان|ریال)',
                     r'>([0-9][0-9,]{5,9})<',
@@ -263,7 +262,7 @@ def get_usdt_only():
             m = re.search(pat, body, re.S | re.I)
             if m:
                 v = clean(m.group(1))
-                if 50000 < v < 500000:  # reasonable range for USDT in IRR (not 10x)
+                if 50000 < v < 500000:
                     return v
         raise Exception('parse')
     def scrape_omp():
@@ -330,79 +329,40 @@ def tiktok_dl(u):
     except Exception: pass
     raise Exception('tiktok failed')
 
-def snapinsta_dl(url):
-    """Auto-scrape snapinsta.app to get Instagram video"""
-    try:
-        # Step 1: Get the page to extract any tokens
-        sess = requests.Session()
-        sess.headers.update({'User-Agent': UA, 'Referer': 'https://snapinsta.app/'})
-        page = sess.get('https://snapinsta.app/', timeout=15).text
-        # Step 2: POST to their API endpoint
-        data = {'url': url, 'lang_code': 'en', 'token': ''}
-        # Find token in page if exists
-        tm = re.search(r'name="token"\s+value="([^"]+)"', page)
-        if tm: data['token'] = tm.group(1)
-        r = sess.post('https://snapinsta.app/action', data=data, timeout=20)
-        res = r.json() if r.text.startswith('{') else json.loads(re.search(r'\{.*\}', r.text, re.S).group(0))
-        html_content = res.get('html') or res.get('data') or ''
-        # Extract video URL from HTML
-        vm = re.search(r'href="(https?://[^"]+)"[^>]*>Download', html_content)
-        if vm:
-            vurl = vm.group(1)
-            data = sess.get(vurl, timeout=60).content
-            return data, 'Instagram Video'
-        raise Exception('no download link')
-    except Exception as e:
-        raise Exception(f'snapinsta: {str(e)[:40]}')
-
-def ssyoutube_dl(url):
-    """Auto-scrape ssyoutube.com to get YouTube video"""
-    try:
-        # Replace youtube.com with ssyoutube.com
-        ss_url = url.replace('youtube.com', 'ssyoutube.com').replace('youtu.be', 'ssyoutube.com/watch?v=')
-        sess = requests.Session()
-        sess.headers.update({'User-Agent': UA})
-        page = sess.get(ss_url, timeout=20, allow_redirects=True).text
-        # Find download links
-        links = re.findall(r'href="(https?://[^"]+)"[^>]*>.*?(?:720p|HD|Download)', page, re.I)
-        if not links:
-            links = re.findall(r'href="(https?://[^"]+\.mp4[^"]*)"', page, re.I)
-        if links:
-            vurl = links[0]
-            data = sess.get(vurl, timeout=90).content
-            return data, 'YouTube Video'
-        raise Exception('no link')
-    except Exception as e:
-        raise Exception(f'ssyoutube: {str(e)[:40]}')
-
-PIPED = ['https://pipedapi.kavin.rocks', 'https://pipedapi.adminforge.de', 'https://pipedapi.reallyaweso.me']
-
-def piped_dl(u):
-    vid = re.search(r'(?:v=|youtu\.be/|shorts/|embed/)([\w-]{11})', u)
-    if not vid: raise Exception('no id')
-    for base in PIPED:
+def insta_dl_multi(url):
+    """Try multiple Instagram download services"""
+    services = [
+        ('igram.world', 'https://igram.world/api/ajaxSearch', {'q': url, 't': 'media'}),
+        ('saveig.app', 'https://saveig.app/api/ajaxSearch', {'q': url, 't': 'media'}),
+        ('snapinsta.app', 'https://snapinsta.app/action', {'url': url, 'lang_code': 'en'}),
+    ]
+    for name, endpoint, data in services:
         try:
-            d = requests.get(base + '/streams/' + vid.group(1), headers={'User-Agent': UA}, timeout=10).json()
-            streams = d.get('videoStreams') or []
-            best = None
-            for s in streams:
-                if '720' in (s.get('quality') or ''): best = s; break
-            if not best and streams: best = streams[-1]
-            if best and best.get('url'):
-                data = requests.get(best['url'], timeout=90, headers={'User-Agent': UA}).content
-                if len(data) > 100000:
-                    return data, (d.get('title') or 'YouTube')[:50]
-        except Exception: continue
-    raise Exception('piped failed')
+            sess = requests.Session()
+            sess.headers.update({'User-Agent': UA, 'Referer': f'https://{name}/'})
+            r = sess.post(endpoint, data=data, timeout=15)
+            res = r.json() if r.text.startswith('{') else {}
+            html_content = res.get('html') or res.get('data') or str(res)
+            vm = re.search(r'href="(https?://[^"]+)"[^>]*>Download', html_content, re.I)
+            if not vm:
+                vm = re.search(r'(https?://[^"\'\s]+\.mp4[^"\'\s]*)', html_content, re.I)
+            if vm:
+                vurl = vm.group(1)
+                video_data = sess.get(vurl, timeout=60).content
+                if len(video_data) > 50000:
+                    return video_data, f'Instagram ({name})'
+        except Exception:
+            continue
+    raise Exception('all insta services failed')
 
 def yt_dl(url):
+    """YouTube download with PO Token support (if installed)"""
     opts = {
         'outtmpl': os.path.join(DL_DIR, '%(id)s.%(ext)s'),
         'format': 'best[height<=720]/best',
         'quiet': True, 'no_warnings': True,
         'noplaylist': True,
         'socket_timeout': 30, 'retries': 3,
-        'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'mweb', 'tv', 'web']}},
         'http_headers': {'User-Agent': UA}
     }
     with yt_dlp.YoutubeDL(opts) as y:
@@ -425,23 +385,10 @@ def handle_download(m, url):
                 data = requests.get(vurl, timeout=30, headers={'User-Agent': UA}).content
                 title = (vd.get('title') or 'TikTok')[:50]
             elif 'instagram.com' in url:
-                # Try snapinsta first, then yt-dlp
                 try:
-                    data, title = snapinsta_dl(url)
-                except Exception as e1:
-                    try:
-                        data, title = yt_dl(url)
-                    except Exception as e2:
-                        raise Exception(f'{str(e1)} | {str(e2)[:40]}')
-            elif 'youtube.com' in url or 'youtu.be' in url:
-                # Try piped, then ssyoutube, then yt-dlp
-                try:
-                    data, title = piped_dl(url)
-                except Exception:
-                    try:
-                        data, title = ssyoutube_dl(url)
-                    except Exception:
-                        data, title = yt_dl(url)
+                    data, title = insta_dl_multi(url)
+                except Exception as e:
+                    data, title = yt_dl(url)
             else:
                 data, title = yt_dl(url)
             if len(data) > 48*1024*1024:
@@ -458,9 +405,9 @@ def handle_download(m, url):
         except Exception as e:
             err = str(e)
             if 'instagram.com' in url:
-                msg = f'❌ اینستاگرام این ویدیو را نمی‌دهد (نیاز به لاگین).\n💡 از <code>snapinsta.app</code> به‌صورت دستی استفاده کنید.\n<code>{html.escape(err[:80])}</code>'
+                msg = f'❌ اینستاگرام این ویدیو را نمی‌دهد.\n💡 از <code>igram.world</code> به‌صورت دستی استفاده کنید.\n<code>{html.escape(err[:80])}</code>'
             elif 'youtube.com' in url or 'youtu.be' in url:
-                msg = f'❌ یوتیوب این ویدیو را نمی‌دهد (بررسی ربات).\n💡 از <code>ssyoutube.com</code> به‌صورت دستی استفاده کنید.\n<code>{html.escape(err[:80])}</code>'
+                msg = f'❌ یوتیوب این ویدیو را نمی‌دهد.\n💡 از <code>ssyoutube.com</code> به‌صورت دستی استفاده کنید.\n<code>{html.escape(err[:80])}</code>'
             else:
                 msg = f'❌ دانلود ناموفق.\n<code>{html.escape(err[:100])}</code>'
             bot.send_message(m.chat.id, msg)
@@ -582,7 +529,6 @@ def cb(c):
 @bot.chat_member_handler(func=lambda cm: True)
 def on_member(cm):
     try:
-        # Blocklist check
         if is_blocked(cm.new_chat_member.user.id):
             try:
                 bot.ban_chat_member(cm.chat.id, cm.new_chat_member.user.id)
