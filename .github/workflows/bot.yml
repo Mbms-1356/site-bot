@@ -1,0 +1,19 @@
+name: bot
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: deps
+        run: pip install -q pyTelegramBotAPI yt-dlp requests
+      - name: run bot
+        run: timeout 295 python bot2.py || true
