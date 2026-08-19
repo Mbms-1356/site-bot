@@ -16,6 +16,7 @@ if not TOKEN or ':' not in TOKEN:
     raise ValueError('Token not found!')
 
 bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
+UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0 Safari/537.36'
 
 SITE = 'https://mbms-1356.github.io/forexin-site-/'
 ARTICLE = SITE + 'lit-liquidity.html'
@@ -160,7 +161,7 @@ youtube.com/@Forexin.turkaslani
 🚫 ارسال لینک و تبلیغ ممنوع (۲ اخطار = مسدودیت).
 با آرزوی سودهای پایدار 📈'''
 
-FLAGS = {'USD': '🇺', 'EUR': '🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨', 'CHF': '🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -185,23 +186,26 @@ def group_menu():
     return m
 
 def fetch_json(url):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    req = urllib.request.Request(url, headers=headers)
+    req = urllib.request.Request(url, headers={'User-Agent': UA})
     return json.load(urllib.request.urlopen(req, timeout=6, context=ctx))
 
 def fetch_text(url):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    req = urllib.request.Request(url, headers=headers)
+    req = urllib.request.Request(url, headers={'User-Agent': UA})
     return urllib.request.urlopen(req, timeout=8, context=ctx).read().decode('utf-8', 'ignore')
 
 def tehran_now():
     return datetime.now(timezone(timedelta(hours=3, minutes=30)))
+
+def clean(x):
+    s = str(x)
+    s = s.translate(str.maketrans({'۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9','٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'}))
+    return int(float(s.replace(',', '').replace('٬', '').replace('،', '')))
 
 def get_gold_only():
     try:
@@ -224,40 +228,44 @@ def gold18_text(p):
     except Exception:
         return ''
 
+def scrape_price(url, pats):
+    body = fetch_text(url)
+    for pat in pats:
+        m = re.search(pat, body, re.S | re.I)
+        if m:
+            try:
+                v = clean(m.group(1))
+                if 1000 < v < 10000000:
+                    return v
+            except Exception:
+                continue
+    raise Exception('parse')
+
 def get_usdt_only():
     results = []
     errs = []
-    def clean(x): return int(float(str(x).replace(',', '')))
     def add(name, fn):
         try:
             p = fn()
             if p and 1000 < p < 10000000:
                 results.append((name, p))
         except Exception as e:
-            errs.append(f"{name}: {str(e)[:30]}")
+            errs.append(f"{name}: {str(e)[:25]}")
     def bonbast_parse(body):
         d = json.loads(body)
         src = d.get('usdt') or d.get('usd')
         return clean(src['sell'])
     add('بن‌بست', lambda: bonbast_parse(fetch_text('https://bonbast.com/json')))
-    add('بن‌بستPOST', lambda: bonbast_parse(requests.post('https://bonbast.com/json', headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://bonbast.com/'}, timeout=6).text))
+    add('بن‌بستPOST', lambda: bonbast_parse(requests.post('https://bonbast.com/json', headers={'User-Agent': UA, 'Referer': 'https://bonbast.com/'}, timeout=6).text))
+    add('تبدیلPOST', lambda: clean(requests.post('https://api1.tabdeal.org/r/api/v1/public/ticker?symbol=USDTIRT', headers={'User-Agent': UA}, timeout=6).json()['data'].get('last') or 0))
+    add('اُم‌فاینکس', lambda: scrape_price('https://www.ompfinex.com/markets/usdt-price', [r'usdt[^0-9۰-٩]{0,400}([۰-٩0-9][۰-٩0-9,،٬]{4,9})', r'تتر[^0-9۰-٩]{0,400}([۰-٩0-9][۰-٩0-9,،٬]{4,9})', r'>([۰-٩0-9][۰-٩0-9,،٬]{5,9})<']))
+    add('نوبیتکس', lambda: scrape_price('https://nobitex.ir/price/usdt/', [r'usdt[^0-9۰-٩]{0,400}([۰-٩0-9][۰-٩0-9,،٬]{4,9})', r'تتر[^0-9۰-٩]{0,400}([۰-٩0-9][۰-٩0-9,،٬]{4,9})', r'>([۰-٩0-9][۰-٩0-9,،٬]{5,9})<']))
+    add('تبدیل', lambda: scrape_price('https://tabdeal.org/usdt-price', [r'usdt[^0-9۰-٩]{0,400}([۰-٩0-9][۰-٩0-9,،٬]{4,9})', r'تتر[^0-9۰-٩]{0,400}([۰-٩0-9][۰-٩0-9,،٬]{4,9})', r'>([۰-٩0-9][۰-٩0-9,،٬]{5,9})<']))
     add('جینا', lambda: bonbast_parse(fetch_text('https://r.jina.ai/https://bonbast.com/json')))
-    add('پراکسی۱', lambda: bonbast_parse(fetch_text('https://api.allorigins.win/raw?url=' + urllib.parse.quote('https://bonbast.com/json', safe=''))))
-    add('پراکسی۳', lambda: bonbast_parse(fetch_text('https://api.codetabs.com/v1/proxy?quest=bonbast.com/json')))
-    def tgju(market, sym):
-        d = json.loads(fetch_text('https://api.tgju.org/v1/market/indicator/summary-price-data?market=' + market + '&symbol=' + sym))
-        data = d.get('data')
-        item = data[0] if isinstance(data, list) and data else (list(data.values())[0] if isinstance(data, dict) and data else d)
-        for k in ('price', 'current', 'last', 'value', 'close'):
-            if isinstance(item, dict) and item.get(k):
-                return clean(item[k])
-        raise Exception('parse')
-    add('تی‌جی‌یو', lambda: tgju('currency', 'usd'))
-    add('نوبیتکس', lambda: clean(json.loads(fetch_text('https://api.nobitex.ir/market/stats?srcCurrency=usdt&dstCurrency=rls'))['stats']['usdt-rls']['latest']) // 10)
     if results:
         name, p = results[0]
         save_usdt_cache(p, name)
-        return f"🇮 <b>قیمت لحظه‌ای بازار ایران:</b>\n🪙 تتر: {p:,} تومان{gold18_text(p)}\n🏦 منبع: {name}\n<i>🤖 Forexin Bot</i>"
+        return f"🇮🇷 <b>قیمت لحظه‌ای بازار ایران:</b>\n🪙 تتر: {p:,} تومان{gold18_text(p)}\n🏦 منبع: {name}\n<i>🤖 Forexin Bot</i>"
     if USDT_CACHE.get('price'):
         age = int(_t.time()) - USDT_CACHE.get('ts', 0)
         if age < 12 * 3600:
@@ -293,13 +301,13 @@ def news_today():
 def tiktok_dl(u):
     q = urllib.parse.quote(u, safe='')
     try:
-        r = requests.get('https://www.tikwm.com/api/?hd=1&url=' + q, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
+        r = requests.get('https://www.tikwm.com/api/?hd=1&url=' + q, headers={'User-Agent': UA}, timeout=20)
         res = r.json()
         if res.get('code') == 0:
             return res['data']
     except Exception: pass
     try:
-        r = requests.post('https://tikwm.com/api/', data={'url': u, 'hd': 1}, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
+        r = requests.post('https://tikwm.com/api/', data={'url': u, 'hd': 1}, headers={'User-Agent': UA}, timeout=20)
         res = r.json()
         if res.get('code') == 0:
             return res['data']
@@ -313,6 +321,55 @@ def tiktok_dl(u):
     except Exception: pass
     raise Exception('tiktok all sources failed')
 
+def yt_id(u):
+    m = re.search(r'(?:v=|youtu\.be/|shorts/|embed/)([\w-]{11})', u)
+    return m.group(1) if m else None
+
+PIPED = ['https://pipedapi.kavin.rocks', 'https://pipedapi.adminforge.de', 'https://pipedapi.reallyaweso.me', 'https://api.piped.private.coffee']
+
+def piped_dl(u):
+    vid = yt_id(u)
+    if not vid:
+        raise Exception('no id')
+    for base in PIPED:
+        try:
+            d = requests.get(base + '/streams/' + vid, headers={'User-Agent': UA}, timeout=10).json()
+            streams = d.get('videoStreams') or []
+            best = None
+            for s in streams:
+                if '720' in (s.get('quality') or ''):
+                    best = s
+                    break
+            if not best and streams:
+                best = streams[-1]
+            if best and best.get('url'):
+                data = requests.get(best['url'], timeout=90, headers={'User-Agent': UA}).content
+                if len(data) > 100000:
+                    return data, (d.get('title') or 'YouTube')[:50]
+        except Exception:
+            continue
+    raise Exception('piped failed')
+
+def yt_dl(url):
+    opts = {
+        'outtmpl': os.path.join(DL_DIR, '%(id)s.%(ext)s'),
+        'format': 'best[height<=720]/best',
+        'quiet': True, 'no_warnings': True,
+        'noplaylist': True,
+        'socket_timeout': 30, 'retries': 3,
+        'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'mweb', 'tv', 'web']}},
+        'http_headers': {'User-Agent': UA}
+    }
+    with yt_dlp.YoutubeDL(opts) as y:
+        info = y.extract_info(url, download=True)
+        fn = y.prepare_filename(info)
+    with open(fn, 'rb') as f:
+        data = f.read()
+    title = info.get('title', 'Video')[:50]
+    try: os.remove(fn)
+    except Exception: pass
+    return data, title
+
 def handle_download(m, url):
     wait = bot.send_message(m.chat.id, '⏳ <b>در حال دانلود... صبر کنید!</b>')
     def job():
@@ -322,26 +379,15 @@ def handle_download(m, url):
                 vurl = vd.get('hdplay') or vd.get('play')
                 if vurl and not vurl.startswith('http'):
                     vurl = 'https://tikwm.com' + vurl
-                data = requests.get(vurl, timeout=30, headers={'User-Agent': 'Mozilla/5.0'}).content
+                data = requests.get(vurl, timeout=30, headers={'User-Agent': UA}).content
                 title = (vd.get('title') or 'TikTok Video')[:50]
+            elif 'youtube.com' in url or 'youtu.be' in url:
+                try:
+                    data, title = piped_dl(url)
+                except Exception:
+                    data, title = yt_dl(url)
             else:
-                opts = {
-                    'outtmpl': os.path.join(DL_DIR, '%(id)s.%(ext)s'),
-                    'format': 'best[height<=720]/best',
-                    'quiet': True, 'no_warnings': True,
-                    'noplaylist': True,
-                    'socket_timeout': 30, 'retries': 3,
-                    'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'mweb', 'tv', 'web']}},
-                    'http_headers': {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0 Safari/537.36'}
-                }
-                with yt_dlp.YoutubeDL(opts) as y:
-                    info = y.extract_info(url, download=True)
-                    fn = y.prepare_filename(info)
-                with open(fn, 'rb') as f:
-                    data = f.read()
-                title = info.get('title', 'Video')[:50]
-                try: os.remove(fn)
-                except Exception: pass
+                data, title = yt_dl(url)
             if len(data) > 48*1024*1024:
                 bot.send_message(m.chat.id, '⚠️ فایل سنگین‌تر از ۴۸MB است و قابل ارسال نیست.')
             else:
@@ -360,7 +406,7 @@ def handle_download(m, url):
             if 'instagram.com' in url and ('login' in low or 'sign in' in low or 'no video formats' in low):
                 msg = '❌ اینستاگرام این ویدیو را فقط با لاگین می‌دهد.\n💡 از <code>snapinsta.app</code> استفاده کنید یا لینک Reels عمومی دیگری بفرستید.'
             elif 'youtube.com' in url or 'youtu.be' in url:
-                msg = f"❌ یوتیوب موقتاً سرور را مسدود کرد (بررسی ربات).\n💡 چند دقیقه بعد دوباره امتحان کنید یا از <code>ssyoutube.com</code> استفاده کنید.\n<code>{html.escape(err[:80])}</code>"
+                msg = f"❌ یوتیوب موقتاً سرور را مسدود کرد.\n💡 چند دقیقه بعد دوباره امتحان کنید یا از <code>ssyoutube.com</code> استفاده کنید.\n<code>{html.escape(err[:80])}</code>"
             else:
                 msg = f"❌ دانلود ناموفق بود.\n💡 تیک‌تاک: <code>snaptik.app</code> | اینستا: <code>snapinsta.app</code>\n<code>{html.escape(err[:100])}</code>"
             bot.send_message(m.chat.id, msg)
