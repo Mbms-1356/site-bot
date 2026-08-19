@@ -134,7 +134,7 @@ QUOTES = [
 ]
 
 GLOSS = {
-    'lat': 'لات: واحد حجم معامله؛ ۱ لات = ۱۰۰ واحد ارز پایه.',
+    'lat': 'لات: واحد حجم معامله؛ ۱ لات = ۱۰ واحد ارز پایه.',
     'pip': 'پیپ: کوچک‌ترین واحد تغییر قیمت.',
     'stop': 'استاپ: سفارش محدودکنندهٔ ضرر.',
     'ahrom': 'اهرم: سرمایهٔ قرضی از بروکر.',
@@ -174,7 +174,7 @@ WELCOME_GROUP = '''سلام {first} عزیز! 🌟
 
 ⚠️ مطالب آموزشی | 🚫 لینک/تبلیغ ممنوع.'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨', 'CHF': '🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦', 'CAD': '🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -249,19 +249,60 @@ def get_usdt_only():
     def add(name, fn):
         try:
             p = fn()
-            if p and 1000 < p < 10000000:
+            if p and 100000 < p < 400000:
                 results.append((name, p))
         except Exception as e:
             errs.append(f"{name}: {str(e)[:25]}")
-    def scrape_first_toman(url):
-        body = fetch_text(url)
-        for m in re.finditer(r'([0-9][0-9,]{4,8})\s*تومان', body):
-            v = clean(m.group(1))
-            if 100000 < v < 400000:
+    def find_key(obj, keys):
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if k in keys:
+                    try:
+                        iv = int(str(v).replace(',', ''))
+                        if iv > 0:
+                            return iv
+                    except Exception:
+                        pass
+                r = find_key(v, keys)
+                if r:
+                    return r
+        elif isinstance(obj, list):
+            for it in obj:
+                r = find_key(it, keys)
+                if r:
+                    return r
+        return None
+    def next_data(body):
+        m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', body, re.S)
+        if not m:
+            m = re.search(r'<script[^>]*id="__NEXT_DATA__"[^>]*>(.*?)</script>', body, re.S)
+        return json.loads(m.group(1)) if m else None
+    def nobitex():
+        body = fetch_text('https://nobitex.ir/price/usdt/')
+        d = next_data(body)
+        if d:
+            v = find_key(d, {'latest', 'bestBuy', 'best_buy'})
+            if v:
+                if v > 1000000:
+                    v //= 10
                 return v
+        m = re.search(r'([0-9][0-9,]{5,8})\s*تومان', body)
+        if m:
+            return clean(m.group(1))
         raise Exception('parse')
-    add('نوبیتکس', lambda: scrape_first_toman('https://nobitex.ir/price/usdt/'))
-    add('اُم‌فاینکس', lambda: scrape_first_toman('https://www.ompfinex.com/markets/usdt-price'))
+    def ompfinex():
+        body = fetch_text('https://www.ompfinex.com/markets/usdt-price')
+        d = next_data(body)
+        if d:
+            v = find_key(d, {'last', 'lastPrice', 'current'})
+            if v and 100000 < v < 400000:
+                return v
+        m = re.search(r'([0-9][0-9,]{5,8})\s*تومان', body)
+        if m:
+            return clean(m.group(1))
+        raise Exception('parse')
+    add('نوبیتکس', nobitex)
+    add('اُم‌فاینکس', ompfinex)
     try:
         d = requests.post('https://api.tabdeal.org/api/v1/market/ticker?symbol=USDTIRT', headers={'User-Agent': UA}, timeout=6).json()
         p = clean(d.get('data', {}).get('last') or d.get('last') or 0)
