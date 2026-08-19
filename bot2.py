@@ -32,6 +32,7 @@ DATA_FILE = 'trades.json'
 ADMIN_FILE = 'admin.json'
 GROUP_FILE = 'group_id.txt'
 INVITE_FILE = 'invites.json'
+CACHE_FILE = 'usdt_cache.json'
 DL_DIR = 'dl'
 os.makedirs(DL_DIR, exist_ok=True)
 
@@ -50,9 +51,21 @@ try:
     with open(INVITE_FILE) as f: INVITES = json.load(f)
 except Exception: pass
 
+USDT_CACHE = {}
+try:
+    with open(CACHE_FILE) as f: USDT_CACHE = json.load(f)
+except Exception: pass
+
 def save_invites():
     try:
         with open(INVITE_FILE, 'w') as f: json.dump(INVITES, f)
+    except Exception: pass
+
+def save_usdt_cache(p, src):
+    global USDT_CACHE
+    USDT_CACHE = {'price': int(p), 'ts': int(_t.time()), 'src': src}
+    try:
+        with open(CACHE_FILE, 'w') as f: json.dump(USDT_CACHE, f)
     except Exception: pass
 
 def save_group(gid):
@@ -147,7 +160,7 @@ youtube.com/@Forexin.turkaslani
 🚫 ارسال لینک و تبلیغ ممنوع (۲ اخطار = مسدودیت).
 با آرزوی سودهای پایدار 📈'''
 
-FLAGS = {'USD': '🇺', 'EUR': '🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨', 'CHF': '🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺', 'EUR': '🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -203,6 +216,14 @@ def get_gold_only():
         except Exception as e2:
             return f"🥇 <b>انس طلا:</b> خطا در دریافت\n<code>{html.escape(str(e2)[:80])}</code>"
 
+def gold18_text(p):
+    try:
+        g = fetch_json('https://api.gold-api.com/price/XAU')
+        ounce = float(g['price'])
+        return f"\n🥇 طلای ۱۸ عیار: {int(p * ounce / 31.1035 * 0.75):,} تومان/گرم"
+    except Exception:
+        return ''
+
 def get_usdt_only():
     results = []
     errs = []
@@ -219,8 +240,9 @@ def get_usdt_only():
         src = d.get('usdt') or d.get('usd')
         return clean(src['sell'])
     add('بن‌بست', lambda: bonbast_parse(fetch_text('https://bonbast.com/json')))
+    add('بن‌بستPOST', lambda: bonbast_parse(requests.post('https://bonbast.com/json', headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://bonbast.com/'}, timeout=6).text))
+    add('جینا', lambda: bonbast_parse(fetch_text('https://r.jina.ai/https://bonbast.com/json')))
     add('پراکسی۱', lambda: bonbast_parse(fetch_text('https://api.allorigins.win/raw?url=' + urllib.parse.quote('https://bonbast.com/json', safe=''))))
-    add('پراکسی۲', lambda: bonbast_parse(fetch_text('https://corsproxy.io/?url=' + urllib.parse.quote('https://bonbast.com/json', safe=''))))
     add('پراکسی۳', lambda: bonbast_parse(fetch_text('https://api.codetabs.com/v1/proxy?quest=bonbast.com/json')))
     def tgju(market, sym):
         d = json.loads(fetch_text('https://api.tgju.org/v1/market/indicator/summary-price-data?market=' + market + '&symbol=' + sym))
@@ -234,15 +256,15 @@ def get_usdt_only():
     add('نوبیتکس', lambda: clean(json.loads(fetch_text('https://api.nobitex.ir/market/stats?srcCurrency=usdt&dstCurrency=rls'))['stats']['usdt-rls']['latest']) // 10)
     if results:
         name, p = results[0]
-        extra = ''
-        try:
-            g = fetch_json('https://api.gold-api.com/price/XAU')
-            ounce = float(g['price'])
-            gold18 = int(p * ounce / 31.1035 * 0.75)
-            extra = f"\n🥇 طلای ۱۸ عیار: {gold18:,} تومان/گرم"
-        except Exception: pass
-        return f"🇮🇷 <b>قیمت لحظه‌ای بازار ایران:</b>\n🪙 تتر: {p:,} تومان{extra}\n🏦 منبع: {name}\n<i>🤖 Forexin Bot</i>"
-    return '⚠️ <b>دریافت قیمت لحظه‌ای ممکن نشد.</b>\nچند دقیقه بعد دوباره بزنید.\n<code>' + html.escape(' | '.join(errs)[:250]) + '</code>'
+        save_usdt_cache(p, name)
+        return f"🇮 <b>قیمت لحظه‌ای بازار ایران:</b>\n🪙 تتر: {p:,} تومان{gold18_text(p)}\n🏦 منبع: {name}\n<i>🤖 Forexin Bot</i>"
+    if USDT_CACHE.get('price'):
+        age = int(_t.time()) - USDT_CACHE.get('ts', 0)
+        if age < 12 * 3600:
+            p = USDT_CACHE['price']
+            mins = max(1, age // 60)
+            return f"🇮🇷 <b>قیمت بازار ایران:</b>\n🪙 تتر: {p:,} تومان{gold18_text(p)}\n🕐 بروزرسانی: {mins} دقیقه پیش | منبع: {USDT_CACHE.get('src', 'مدیریت')}\n<i>🤖 Forexin Bot</i>"
+    return '⚠️ <b>دریافت قیمت لحظه‌ای ممکن نشد.</b>\nمدیریت: با دستور /usdt قیمت را تنظیم کنید.\n<code>' + html.escape(' | '.join(errs)[:200]) + '</code>'
 
 def news_today():
     try:
@@ -335,8 +357,8 @@ def handle_download(m, url):
         except Exception as e:
             err = str(e)
             low = err.lower()
-            if 'instagram.com' in url and ('login' in low or 'sign in' in low):
-                msg = '❌ اینستاگرام نیاز به لاگین دارد. فقط لینک Reels عمومی بفرستید.'
+            if 'instagram.com' in url and ('login' in low or 'sign in' in low or 'no video formats' in low):
+                msg = '❌ اینستاگرام این ویدیو را فقط با لاگین می‌دهد.\n💡 از <code>snapinsta.app</code> استفاده کنید یا لینک Reels عمومی دیگری بفرستید.'
             elif 'youtube.com' in url or 'youtu.be' in url:
                 msg = f"❌ یوتیوب موقتاً سرور را مسدود کرد (بررسی ربات).\n💡 چند دقیقه بعد دوباره امتحان کنید یا از <code>ssyoutube.com</code> استفاده کنید.\n<code>{html.escape(err[:80])}</code>"
             else:
@@ -498,6 +520,15 @@ def txt(m):
             except Exception: pass
             try: bot.send_message(m.chat.id, '⛔ کاربر به دلیل تکرار تبلیغ مسدود شد.')
             except Exception: pass
+        return
+
+    if t.startswith('/usdt') and ensure_admin(uid):
+        try:
+            p = int(float(t.split()[1]))
+            save_usdt_cache(p, 'مدیریت')
+            bot.reply_to(m, f"✅ قیمت تتر روی {p:,} تومان تنظیم شد.")
+        except Exception:
+            bot.reply_to(m, 'فرمت صحیح: /usdt 105000')
         return
 
     if not is_grp and any(x in t for x in ['youtube.com', 'youtu.be', 'instagram.com', 'tiktok.com']):
