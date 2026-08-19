@@ -102,7 +102,7 @@ QUOTES = [
 ]
 
 GLOSS = {
-    'lat': 'لات: واحد حجم معامله؛ ۱ لات = ۱۰۰۰۰۰ واحد ارز پایه.',
+    'lat': 'لات: واحد حجم معامله؛ ۱ لات = ۱۰۰۰۰ واحد ارز پایه.',
     'pip': 'پیپ: کوچک‌ترین واحد تغییر قیمت (معمولاً رقم چهارم اعشار).',
     'stop': 'استاپ: سفارش محدودکنندهٔ ضرر (Stop Loss).',
     'ahrom': 'اهرم: سرمایهٔ قرضی از بروکر برای بزرگ‌تر کردن معامله.',
@@ -136,7 +136,6 @@ BASE_GUIDE = '''📌 راهنمای کامل ورود به کانال بیس (آ
 ۵. لینک منقضی می‌شود؟ بله، یک‌بار مصرف است.
 ۶. از بیس خارج شوم؟ دسترسی باطل می‌شود.
 ۷. رایگان است؟ بله ۱۰۰٪ رایگان. 💚
-. سؤال فوری؟ گروه: @forexinturkaslanilitcommuniti
 
 🎓 لینک کانال بیس: @Forexin_Turkaslani_Base
 ⚠️ فقط برای کسانی باز می‌شود که دسترسی‌شان فعال شده باشد.
@@ -150,9 +149,9 @@ WELCOME_GROUP = '''سلام {first} عزیز! 🌟
 کانال‌های ما:
 1️⃣  کانال سیگنال و لایو (رایگان)
 @forexin_turkaslanifree
-2️⃣ 🎓 کانال آموزش آکادمی
+2️⃣  کانال آموزش آکادمی
 @Forexin_Turkaslani_Base
-3️⃣ 💬 همین گروه (LIT Community)
+3️⃣  همین گروه (LIT Community)
 4️⃣ ▶️ یوتیوب
 youtube.com/@Forexin.turkaslani
 
@@ -160,7 +159,7 @@ youtube.com/@Forexin.turkaslani
 🚫 ارسال لینک و تبلیغ ممنوع (۲ اخطار = مسدودیت).
 با آرزوی سودهای پایدار 📈'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪', 'GBP': '🇧', 'JPY': '🇯🇵', 'CNY': '🇨', 'AUD': '🇦', 'CAD': '🇦', 'CHF': '🇨', 'NZD': '🇳'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -199,7 +198,7 @@ def get_gold_only():
         d = fetch_json('https://api.gold-api.com/price/XAU')
         p = round(float(d['price']), 2)
         return f"🥇 <b>قیمت لحظه‌ای انس جهانی طلا:</b> ${p}\n<i>🤖 Forexin Bot</i>"
-    except Exception as e:
+    except Exception:
         try:
             d = fetch_json('https://data-asg.goldprice.org/dbXRates/USD')
             p = round(float(d['items'][0]['xau_price']), 2)
@@ -209,33 +208,45 @@ def get_gold_only():
 
 def get_usdt_only():
     results = []
-    last_err = ''
+    errs = []
     def clean(x): return int(float(str(x).replace(',', '')))
-    try:
-        d = fetch_json('https://api.nobitex.ir/market/stats?srcCurrency=usdt&dstCurrency=rls')
-        results.append(('نوبیتکس', clean(d['stats']['usdt-rls']['latest']) // 10))
-    except Exception as e: last_err = 'Nobitex: ' + str(e)[:60]
-    try:
+    def add(name, fn):
+        try:
+            p = fn()
+            if p and p > 1000:
+                results.append((name, p))
+        except Exception as e:
+            errs.append(f"{name}: {str(e)[:40]}")
+    def tgju(sym):
+        d = fetch_json('https://api.tgju.org/v1/market/indicator/summary-price-data?market=fx&symbol=' + sym)
+        data = d.get('data')
+        item = data[0] if isinstance(data, list) and data else (list(data.values())[0] if isinstance(data, dict) and data else d)
+        for k in ('price', 'current', 'last', 'value', 'close'):
+            if isinstance(item, dict) and item.get(k):
+                return clean(item[k])
+        raise Exception('parse')
+    add('تی‌جی‌یو', lambda: tgju('usdt'))
+    add('دلار', lambda: tgju('usd'))
+    add('نوبیتکس', lambda: clean(fetch_json('https://api.nobitex.ir/market/stats?srcCurrency=usdt&dstCurrency=rls')['stats']['usdt-rls']['latest']) // 10)
+    def bonbast():
         d = fetch_json('https://bonbast.com/json')
         src = d.get('usdt') or d.get('usd')
-        results.append(('بن‌بست', clean(src['sell'])))
-    except Exception as e: last_err = 'Bonbast: ' + str(e)[:60]
-    for url in ('https://api1.tabdeal.org/r/api/v1/ticker?symbol=USDTIRT', 'https://api1.tabdeal.org/r/api/v1/public/ticker?symbol=USDTIRT'):
-        try:
-            d = fetch_json(url)
-            p = clean(d['data'].get('last') or d['data'].get('lastPrice'))
-            results.append(('تبدیل', p))
-            break
-        except Exception as e: last_err = 'Tabdeal: ' + str(e)[:60]
-    try:
-        d = fetch_json('https://api.wallex.ir/v1/markets/ticker?symbol=USDTIRT')
-        results.append(('والکس', clean(d['data']['latest']['lastPrice'])))
-    except Exception as e: last_err = 'Wallex: ' + str(e)[:60]
+        return clean(src['sell'])
+    add('بن‌بست', bonbast)
+    def tabdeal():
+        for url in ('https://api1.tabdeal.org/r/api/v1/ticker?symbol=USDTIRT', 'https://api1.tabdeal.org/r/api/v1/public/ticker?symbol=USDTIRT'):
+            try:
+                d = fetch_json(url)
+                return clean(d['data'].get('last') or d['data'].get('lastPrice'))
+            except Exception:
+                continue
+        raise Exception('tabdeal')
+    add('تبدیل', tabdeal)
     if results:
         lines = '\n'.join([f"🏦 {n}: {p:,} تومان" for n, p in results])
         avg = sum(p for _, p in results) // len(results)
         return f"🇮🇷 <b>قیمت لحظه‌ای تتر:</b>\n{lines}\n📊 میانگین: {avg:,} تومان\n<i>🤖 Forexin Bot</i>"
-    return f"🇮 <b>قیمت تتر:</b> خطا در دریافت\n<code>{last_err}</code>"
+    return '🇮🇷 <b>قیمت تتر:</b> خطا در دریافت\n<code>' + ' | '.join(errs)[:300] + '</code>'
 
 def news_today():
     try:
@@ -344,7 +355,7 @@ def start(m):
         return
     if ADMIN is None:
         ensure_admin(uid)
-        bot.send_message(uid, '🛠️ <b>شما ادمین شدید!</b>')
+        bot.send_message(uid, '🛠️ <b>شما ادمین شدند!</b>')
         return
     USERS.add(uid)
     extra = ''
