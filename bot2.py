@@ -174,7 +174,7 @@ WELCOME_GROUP = '''سلام {first} عزیز! 🌟
 
 ⚠️ مطالب آموزشی | 🚫 لینک/تبلیغ ممنوع.'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨', 'CHF': '🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -286,7 +286,7 @@ def get_usdt_only():
     if results:
         name, p = results[0]
         save_usdt_cache(p, name)
-        return f"🇮 <b>قیمت لحظه‌ای بازار ایران:</b>\n🪙 تتر: {p:,} تومان{gold18_text(p)}\n🏦 منبع: {name}\n<i>🤖 Forexin Bot</i>"
+        return f"🇮🇷 <b>قیمت لحظه‌ای بازار ایران:</b>\n🪙 تتر: {p:,} تومان{gold18_text(p)}\n🏦 منبع: {name}\n<i>🤖 Forexin Bot</i>"
     if USDT_CACHE.get('price'):
         age = int(_t.time()) - USDT_CACHE.get('ts', 0)
         if age < 24 * 3600:
@@ -405,22 +405,29 @@ def piped_dl(u):
         except Exception: continue
     raise Exception('piped failed')
 
-INVIDIOUS = ['https://inv.nadeko.net', 'https://invidious.f5.si', 'https://y.com.sb', 'https://iv.melmac.space']
+INVIDIOUS = ['https://inv.nadeko.net', 'https://invidious.f5.si', 'https://y.com.sb', 'https://iv.melmac.space', 'https://invidious.nerdvpn.de', 'https://inv.tux.pizza', 'https://invidious.flokinet.to']
 
 def invidious_dl(u):
     vid = yt_id(u)
     if not vid: raise Exception('no id')
     for base in INVIDIOUS:
         try:
-            d = requests.get(base + '/api/v1/videos/' + vid, headers={'User-Agent': UA}, timeout=10).json()
-            fmts = d.get('formatStreams') or []
-            if not fmts: continue
-            best = fmts[0]
+            d = requests.get(base + '/api/v1/videos/' + vid + '?local=true', headers={'User-Agent': UA}, timeout=10).json()
+            fmts = (d.get('formatStreams') or []) + (d.get('adaptiveFormats') or [])
+            best = None
             for f in fmts:
-                if '720' in (f.get('qualityLabel') or ''): best = f; break
-            data = requests.get(best['url'], timeout=90, headers={'User-Agent': UA}).content
-            if len(data) > 100000:
-                return data, (d.get('title') or 'YouTube')[:50]
+                if str(f.get('type', '')).startswith('video/mp4') and f.get('url'):
+                    q = str(f.get('qualityLabel') or f.get('quality') or '')
+                    if '720' in q or '480' in q or '360' in q:
+                        best = f
+                        break
+                    if not best: best = f
+            if best and best.get('url'):
+                vurl = best['url']
+                if vurl.startswith('/'): vurl = base + vurl
+                data = requests.get(vurl, timeout=90, headers={'User-Agent': UA}).content
+                if len(data) > 100000:
+                    return data, (d.get('title') or 'YouTube')[:50]
         except Exception: continue
     raise Exception('invidious failed')
 
@@ -448,6 +455,7 @@ def yt_dl(url):
         'quiet': True, 'no_warnings': True,
         'noplaylist': True,
         'socket_timeout': 30, 'retries': 3,
+        'extractor_args': {'youtube': {'player_client': ['tv', 'android', 'ios', 'web']}},
         'http_headers': {'User-Agent': UA}
     }
     with yt_dlp.YoutubeDL(opts) as y:
