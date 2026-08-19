@@ -147,7 +147,7 @@ youtube.com/@Forexin.turkaslani
 🚫 ارسال لینک و تبلیغ ممنوع (۲ اخطار = مسدودیت).
 با آرزوی سودهای پایدار 📈'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺', 'EUR': '🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨', 'CHF': '🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -179,6 +179,14 @@ def fetch_json(url):
     req = urllib.request.Request(url, headers=headers)
     return json.load(urllib.request.urlopen(req, timeout=6, context=ctx))
 
+def fetch_text(url):
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    req = urllib.request.Request(url, headers=headers)
+    return urllib.request.urlopen(req, timeout=8, context=ctx).read().decode('utf-8', 'ignore')
+
 def tehran_now():
     return datetime.now(timezone(timedelta(hours=3, minutes=30)))
 
@@ -202,31 +210,39 @@ def get_usdt_only():
     def add(name, fn):
         try:
             p = fn()
-            if p and p > 1000:
+            if p and 1000 < p < 10000000:
                 results.append((name, p))
         except Exception as e:
-            errs.append(f"{name}: {str(e)[:40]}")
+            errs.append(f"{name}: {str(e)[:30]}")
+    def bonbast_parse(body):
+        d = json.loads(body)
+        src = d.get('usdt') or d.get('usd')
+        return clean(src['sell'])
+    add('بن‌بست', lambda: bonbast_parse(fetch_text('https://bonbast.com/json')))
+    add('پراکسی۱', lambda: bonbast_parse(fetch_text('https://api.allorigins.win/raw?url=' + urllib.parse.quote('https://bonbast.com/json', safe=''))))
+    add('پراکسی۲', lambda: bonbast_parse(fetch_text('https://corsproxy.io/?url=' + urllib.parse.quote('https://bonbast.com/json', safe=''))))
+    add('پراکسی۳', lambda: bonbast_parse(fetch_text('https://api.codetabs.com/v1/proxy?quest=bonbast.com/json')))
     def tgju(market, sym):
-        d = fetch_json('https://api.tgju.org/v1/market/indicator/summary-price-data?market=' + market + '&symbol=' + sym)
+        d = json.loads(fetch_text('https://api.tgju.org/v1/market/indicator/summary-price-data?market=' + market + '&symbol=' + sym))
         data = d.get('data')
         item = data[0] if isinstance(data, list) and data else (list(data.values())[0] if isinstance(data, dict) and data else d)
         for k in ('price', 'current', 'last', 'value', 'close'):
             if isinstance(item, dict) and item.get(k):
                 return clean(item[k])
         raise Exception('parse')
-    add('دلار', lambda: tgju('currency', 'usd'))
-    add('تتر', lambda: tgju('crypto', 'usdt'))
-    def bonbast():
-        r = requests.get('https://bonbast.com/json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Referer': 'https://bonbast.com/'}, timeout=6)
-        d = r.json()
-        src = d.get('usdt') or d.get('usd')
-        return clean(src['sell'])
-    add('بن‌بست', bonbast)
+    add('تی‌جی‌یو', lambda: tgju('currency', 'usd'))
+    add('نوبیتکس', lambda: clean(json.loads(fetch_text('https://api.nobitex.ir/market/stats?srcCurrency=usdt&dstCurrency=rls'))['stats']['usdt-rls']['latest']) // 10)
     if results:
-        lines = '\n'.join([f"🏦 {n}: {p:,} تومان" for n, p in results])
-        avg = sum(p for _, p in results) // len(results)
-        return f"🇮🇷 <b>قیمت لحظه‌ای تتر:</b>\n{lines}\n📊 میانگین: {avg:,} تومان\n<i>🤖 Forexin Bot</i>"
-    return '🇮🇷 <b>قیمت تتر:</b> خطا در دریافت\n<code>' + html.escape(' | '.join(errs)[:300]) + '</code>'
+        name, p = results[0]
+        extra = ''
+        try:
+            g = fetch_json('https://api.gold-api.com/price/XAU')
+            ounce = float(g['price'])
+            gold18 = int(p * ounce / 31.1035 * 0.75)
+            extra = f"\n🥇 طلای ۱۸ عیار: {gold18:,} تومان/گرم"
+        except Exception: pass
+        return f"🇮🇷 <b>قیمت لحظه‌ای بازار ایران:</b>\n🪙 تتر: {p:,} تومان{extra}\n🏦 منبع: {name}\n<i>🤖 Forexin Bot</i>"
+    return '⚠️ <b>دریافت قیمت لحظه‌ای ممکن نشد.</b>\nچند دقیقه بعد دوباره بزنید.\n<code>' + html.escape(' | '.join(errs)[:250]) + '</code>'
 
 def news_today():
     try:
