@@ -102,7 +102,7 @@ QUOTES = [
 ]
 
 GLOSS = {
-    'lat': 'لات: واحد حجم معامله؛ ۱ لات = ۱۰۰۰۰ واحد ارز پایه.',
+    'lat': 'لات: واحد حجم معامله؛ ۱ لات = ۱۰۰۰ واحد ارز پایه.',
     'pip': 'پیپ: کوچک‌ترین واحد تغییر قیمت (معمولاً رقم چهارم اعشار).',
     'stop': 'استاپ: سفارش محدودکنندهٔ ضرر (Stop Loss).',
     'ahrom': 'اهرم: سرمایهٔ قرضی از بروکر برای بزرگ‌تر کردن معامله.',
@@ -147,7 +147,7 @@ youtube.com/@Forexin.turkaslani
 🚫 ارسال لینک و تبلیغ ممنوع (۲ اخطار = مسدودیت).
 با آرزوی سودهای پایدار 📈'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺', 'EUR': '🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨', 'AUD': '🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -165,8 +165,9 @@ def build_menu():
 def group_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
     m.add(types.InlineKeyboardButton('💰 طلا', callback_data='gold'), types.InlineKeyboardButton('🇮🇷 تتر', callback_data='usdt'))
-    m.add(types.InlineKeyboardButton('📜 قوانین', callback_data='rules'), types.InlineKeyboardButton('🧠 آزمون', url=QUIZ))
-    m.add(types.InlineKeyboardButton('🎁 لینک‌ها', callback_data='inv'), types.InlineKeyboardButton('📚 مقاله', url=ARTICLE))
+    m.add(types.InlineKeyboardButton('🎬 دانلود', callback_data='dl'), types.InlineKeyboardButton('📜 قوانین', callback_data='rules'))
+    m.add(types.InlineKeyboardButton('🧠 آزمون', url=QUIZ), types.InlineKeyboardButton('📚 مقاله', url=ARTICLE))
+    m.add(types.InlineKeyboardButton('🎁 لینک‌ها', callback_data='inv'), types.InlineKeyboardButton('🎟️ لینک دعوت', callback_data='invite'))
     m.add(types.InlineKeyboardButton('🚀 شروع', callback_data='st'))
     return m
 
@@ -205,16 +206,16 @@ def get_usdt_only():
                 results.append((name, p))
         except Exception as e:
             errs.append(f"{name}: {str(e)[:40]}")
-    def tgju(sym):
-        d = fetch_json('https://api.tgju.org/v1/market/indicator/summary-price-data?market=fx&symbol=' + sym)
+    def tgju(market, sym):
+        d = fetch_json('https://api.tgju.org/v1/market/indicator/summary-price-data?market=' + market + '&symbol=' + sym)
         data = d.get('data')
         item = data[0] if isinstance(data, list) and data else (list(data.values())[0] if isinstance(data, dict) and data else d)
         for k in ('price', 'current', 'last', 'value', 'close'):
             if isinstance(item, dict) and item.get(k):
                 return clean(item[k])
         raise Exception('parse')
-    add('تی‌جی‌یو', lambda: tgju('usdt'))
-    add('دلار', lambda: tgju('usd'))
+    add('دلار', lambda: tgju('fx', 'usd'))
+    add('تتر', lambda: tgju('crypto', 'usdt'))
     add('نوبیتکس', lambda: clean(fetch_json('https://api.nobitex.ir/market/stats?srcCurrency=usdt&dstCurrency=rls')['stats']['usdt-rls']['latest']) // 10)
     def bonbast():
         d = fetch_json('https://bonbast.com/json')
@@ -300,6 +301,7 @@ def handle_download(m, url):
                     'format': 'best[height<=720]',
                     'quiet': True, 'no_warnings': True,
                     'socket_timeout': 30, 'retries': 3,
+                    'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'tv']}},
                     'http_headers': {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0 Safari/537.36'}
                 }
                 with yt_dlp.YoutubeDL(opts) as y:
@@ -324,8 +326,11 @@ def handle_download(m, url):
             except Exception: pass
         except Exception as e:
             err = str(e)
-            if 'login' in err.lower() or 'sign in' in err.lower():
+            low = err.lower()
+            if 'instagram.com' in url and ('login' in low or 'sign in' in low):
                 msg = '❌ اینستاگرام نیاز به لاگین دارد. فقط لینک Reels عمومی بفرستید.'
+            elif 'youtube.com' in url or 'youtu.be' in url:
+                msg = f"❌ یوتیوب موقتاً سرور را مسدود کرد (بررسی ربات).\n💡 چند دقیقه بعد دوباره امتحان کنید یا از <code>ssyoutube.com</code> استفاده کنید.\n<code>{err[:80]}</code>"
             else:
                 msg = f"❌ دانلود ناموفق بود.\n💡 تیک‌تاک: <code>snaptik.app</code> | اینستا: <code>snapinsta.app</code>\n<code>{err[:100]}</code>"
             bot.send_message(m.chat.id, msg)
@@ -378,7 +383,10 @@ def cb(c):
     d = c.data
     try:
         if d == 'st':
-            bot.send_message(chat, WELCOME_PRIV, reply_markup=build_menu())
+            if c.message.chat.type in ('group', 'supergroup'):
+                bot.send_message(chat, WELCOME_PRIV, reply_markup=group_menu())
+            else:
+                bot.send_message(chat, WELCOME_PRIV, reply_markup=build_menu())
         elif d == 'inv':
             bot.send_message(chat, f"🎁 <b>لینک‌های مفید:</b>\n🤖 ربات اصلی: {MAINBOT}\n📢 کانال سیگنال: @forexin_turkaslanifree\n🎓 کانال بیس: @Forexin_Turkaslani_Base\n💬 گروه: @forexinturkaslanilitcommuniti")
         elif d == 'gold':
