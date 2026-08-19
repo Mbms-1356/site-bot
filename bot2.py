@@ -1,4 +1,4 @@
-import os, json, threading, time as _t, re, urllib.request, urllib.parse, ssl
+import os, json, threading, time as _t, re, urllib.request, urllib.parse, ssl, html
 from datetime import datetime, timedelta, timezone
 import telebot
 from telebot import types
@@ -102,7 +102,7 @@ QUOTES = [
 ]
 
 GLOSS = {
-    'lat': 'لات: واحد حجم معامله؛ ۱ لات = ۱۰۰۰ واحد ارز پایه.',
+    'lat': 'لات: واحد حجم معامله؛ ۱ لات = ۱۰۰ واحد ارز پایه.',
     'pip': 'پیپ: کوچک‌ترین واحد تغییر قیمت (معمولاً رقم چهارم اعشار).',
     'stop': 'استاپ: سفارش محدودکنندهٔ ضرر (Stop Loss).',
     'ahrom': 'اهرم: سرمایهٔ قرضی از بروکر برای بزرگ‌تر کردن معامله.',
@@ -147,7 +147,7 @@ youtube.com/@Forexin.turkaslani
 🚫 ارسال لینک و تبلیغ ممنوع (۲ اخطار = مسدودیت).
 با آرزوی سودهای پایدار 📈'''
 
-FLAGS = {'USD': '🇺', 'EUR': '🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨', 'AUD': '🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -177,7 +177,7 @@ def fetch_json(url):
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     req = urllib.request.Request(url, headers=headers)
-    return json.load(urllib.request.urlopen(req, timeout=8, context=ctx))
+    return json.load(urllib.request.urlopen(req, timeout=6, context=ctx))
 
 def tehran_now():
     return datetime.now(timezone(timedelta(hours=3, minutes=30)))
@@ -193,7 +193,7 @@ def get_gold_only():
             p = round(float(d['items'][0]['xau_price']), 2)
             return f"🥇 <b>قیمت لحظه‌ای انس جهانی طلا:</b> ${p}\n<i>🤖 Forexin Bot</i>"
         except Exception as e2:
-            return f"🥇 <b>انس طلا:</b> خطا در دریافت\n<code>{str(e2)[:80]}</code>"
+            return f"🥇 <b>انس طلا:</b> خطا در دریافت\n<code>{html.escape(str(e2)[:80])}</code>"
 
 def get_usdt_only():
     results = []
@@ -235,7 +235,7 @@ def get_usdt_only():
         lines = '\n'.join([f"🏦 {n}: {p:,} تومان" for n, p in results])
         avg = sum(p for _, p in results) // len(results)
         return f"🇮🇷 <b>قیمت لحظه‌ای تتر:</b>\n{lines}\n📊 میانگین: {avg:,} تومان\n<i>🤖 Forexin Bot</i>"
-    return '🇮🇷 <b>قیمت تتر:</b> خطا در دریافت\n<code>' + ' | '.join(errs)[:300] + '</code>'
+    return '🇮🇷 <b>قیمت تتر:</b> خطا در دریافت\n<code>' + html.escape(' | '.join(errs)[:300]) + '</code>'
 
 def news_today():
     try:
@@ -300,8 +300,9 @@ def handle_download(m, url):
                     'outtmpl': os.path.join(DL_DIR, '%(id)s.%(ext)s'),
                     'format': 'best[height<=720]',
                     'quiet': True, 'no_warnings': True,
+                    'noplaylist': True,
                     'socket_timeout': 30, 'retries': 3,
-                    'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'tv']}},
+                    'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'mweb', 'tv', 'web']}},
                     'http_headers': {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0 Safari/537.36'}
                 }
                 with yt_dlp.YoutubeDL(opts) as y:
@@ -330,9 +331,9 @@ def handle_download(m, url):
             if 'instagram.com' in url and ('login' in low or 'sign in' in low):
                 msg = '❌ اینستاگرام نیاز به لاگین دارد. فقط لینک Reels عمومی بفرستید.'
             elif 'youtube.com' in url or 'youtu.be' in url:
-                msg = f"❌ یوتیوب موقتاً سرور را مسدود کرد (بررسی ربات).\n💡 چند دقیقه بعد دوباره امتحان کنید یا از <code>ssyoutube.com</code> استفاده کنید.\n<code>{err[:80]}</code>"
+                msg = f"❌ یوتیوب موقتاً سرور را مسدود کرد (بررسی ربات).\n💡 چند دقیقه بعد دوباره امتحان کنید یا از <code>ssyoutube.com</code> استفاده کنید.\n<code>{html.escape(err[:80])}</code>"
             else:
-                msg = f"❌ دانلود ناموفق بود.\n💡 تیک‌تاک: <code>snaptik.app</code> | اینستا: <code>snapinsta.app</code>\n<code>{err[:100]}</code>"
+                msg = f"❌ دانلود ناموفق بود.\n💡 تیک‌تاک: <code>snaptik.app</code> | اینستا: <code>snapinsta.app</code>\n<code>{html.escape(err[:100])}</code>"
             bot.send_message(m.chat.id, msg)
             try: bot.delete_message(m.chat.id, wait.message_id)
             except Exception: pass
@@ -424,7 +425,7 @@ def cb(c):
                         rec['link'] = bot.create_chat_invite_link(FREE_CHANNEL, name=str(uid)).invite_link
                         save_invites()
                     except Exception as e:
-                        bot.send_message(chat, f"❌ ساخت لینک ناموفق بود؛ ربات باید در کانال ادمین باشد.\n<code>{str(e)[:80]}</code>")
+                        bot.send_message(chat, f"❌ ساخت لینک ناموفق بود؛ ربات باید در کانال ادمین باشد.\n<code>{html.escape(str(e)[:80])}</code>")
                         bot.answer_callback_query(c.id)
                         return
                 bot.send_message(chat, f"🎁 <b>لینک دعوت شخصی شما:</b>\n<code>{rec['link']}</code>\n\nآن را برای ۲ دوست بفرستید. هر عضو موفق = ۱ دعوت.\n📊 فعلی: {rec.get('count', 0)} از ۲")
