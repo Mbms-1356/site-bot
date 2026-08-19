@@ -147,7 +147,7 @@ youtube.com/@Forexin.turkaslani
 🚫 ارسال لینک و تبلیغ ممنوع (۲ اخطار = مسدودیت).
 با آرزوی سودهای پایدار 📈'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -214,23 +214,14 @@ def get_usdt_only():
             if isinstance(item, dict) and item.get(k):
                 return clean(item[k])
         raise Exception('parse')
-    add('دلار', lambda: tgju('fx', 'usd'))
+    add('دلار', lambda: tgju('currency', 'usd'))
     add('تتر', lambda: tgju('crypto', 'usdt'))
-    add('نوبیتکس', lambda: clean(fetch_json('https://api.nobitex.ir/market/stats?srcCurrency=usdt&dstCurrency=rls')['stats']['usdt-rls']['latest']) // 10)
     def bonbast():
-        d = fetch_json('https://bonbast.com/json')
+        r = requests.get('https://bonbast.com/json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Referer': 'https://bonbast.com/'}, timeout=6)
+        d = r.json()
         src = d.get('usdt') or d.get('usd')
         return clean(src['sell'])
     add('بن‌بست', bonbast)
-    def tabdeal():
-        for url in ('https://api1.tabdeal.org/r/api/v1/ticker?symbol=USDTIRT', 'https://api1.tabdeal.org/r/api/v1/public/ticker?symbol=USDTIRT'):
-            try:
-                d = fetch_json(url)
-                return clean(d['data'].get('last') or d['data'].get('lastPrice'))
-            except Exception:
-                continue
-        raise Exception('tabdeal')
-    add('تبدیل', tabdeal)
     if results:
         lines = '\n'.join([f"🏦 {n}: {p:,} تومان" for n, p in results])
         avg = sum(p for _, p in results) // len(results)
@@ -298,7 +289,7 @@ def handle_download(m, url):
             else:
                 opts = {
                     'outtmpl': os.path.join(DL_DIR, '%(id)s.%(ext)s'),
-                    'format': 'best[height<=720]',
+                    'format': 'best[height<=720]/best',
                     'quiet': True, 'no_warnings': True,
                     'noplaylist': True,
                     'socket_timeout': 30, 'retries': 3,
