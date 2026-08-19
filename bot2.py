@@ -161,7 +161,7 @@ BASE_GUIDE = '''📌 راهنمای کامل ورود به کانال بیس
 
 تیم Forexin Turkaslani'''
 
-WELCOME_PRIV = 'سلام! 👋\nمن دستیار فارکسین ترک اصلانی هستم.\n<i>📊 ژورنال | 💰 قیمت |  دانلودر | 📚 آموزش</i>'
+WELCOME_PRIV = 'سلام! 👋\nمن دستیار فارکسین ترک اصلانی هستم.\n<i>📊 ژورنال | 💰 قیمت | 🎬 دانلودر | 📚 آموزش</i>'
 
 WELCOME_GROUP = '''سلام {first} عزیز! 🌟
 به «LIT Community» خوش آمدید.
@@ -174,7 +174,7 @@ WELCOME_GROUP = '''سلام {first} عزیز! 🌟
 
 ⚠️ مطالب آموزشی | 🚫 لینک/تبلیغ ممنوع.'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺', 'EUR': '🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨', 'CHF': '🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -253,6 +253,12 @@ def get_usdt_only():
                 results.append((name, p))
         except Exception as e:
             errs.append(f"{name}: {str(e)[:30]}")
+    def site_price():
+        d = json.loads(fetch_text(SITE + 'price.json?t=' + str(int(_t.time())), timeout=8))
+        p = int(d.get('usdt') or 0)
+        if 100000 < p < 400000:
+            return p
+        raise Exception('site')
     def binance_p2p():
         r = requests.post('https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search',
             headers={'User-Agent': UA, 'Content-Type': 'application/json', 'clienttype': 'web'},
@@ -327,15 +333,10 @@ def get_usdt_only():
                     v //= 10
                 return v
         return toman_regex(body)
-    def microlink(url):
-        d = json.loads(fetch_text('https://api.microlink.io/?url=' + urllib.parse.quote(url, safe=''), timeout=25))
-        txt = ((d.get('data') or {}).get('text')) or ''
-        return toman_regex(txt)
+    add('سایت‌خودی', site_price)
     add('بایننسP2P', binance_p2p)
     add('بن‌بست', bonbast)
     add('نوبیتکس', nobitex)
-    add('نوبیتکس‌رندر', lambda: microlink('https://nobitex.ir/price/usdt/'))
-    add('اُم‌فاینکس‌رندر', lambda: microlink('https://www.ompfinex.com/markets/usdt-price'))
     try:
         d = requests.post('https://api.tabdeal.org/api/v1/market/ticker?symbol=USDTIRT', headers={'User-Agent': UA}, timeout=6).json()
         p = clean(d.get('data', {}).get('last') or d.get('last') or 0)
