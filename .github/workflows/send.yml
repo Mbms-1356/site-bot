@@ -5,81 +5,12 @@ on:
 jobs:
   send:
     runs-on: ubuntu-latest
+    env:
+      TOKEN: "8672154032:AAEgSGwR7uXGZsdpxNJvgsXswJ4aHoAYzhE"
+      GH_PAT: ${{ secrets.GH_PAT }}
     steps:
-      - name: studio
-        env:
-          TOKEN: "8672154032:AAEgSGwR7uXGZsdpxNJvgsXswJ4aHoAYzhE"
-          GH_PAT: ${{ secrets.GH_PAT }}
+      - name: run studio
         run: |
-          python3 - <<'PYEND'
-          import json,os,urllib.request as ur,urllib.parse as up,random,traceback
-          API='https://api.telegram.org/bot'+os.environ['TOKEN'];CHAT='227491135'
-          def post(p,d,ct='application/json'):
-              return ur.urlopen(ur.Request(API+p,data=d,headers={'Content-Type':ct}),timeout=30).read()
-          def txt(t):post('/sendMessage',json.dumps({'chat_id':CHAT,'text':t}).encode())
-          def get(u,t=40):return ur.urlopen(ur.Request(u,headers={'User-Agent':'Mozilla/5.0'}),timeout=t).read()
-          def fa(n):
-              d=''.join(chr(1776+i) for i in range(10));s=format(int(n),',');o=''
-              for c in s:o+=d[int(c)] if c.isdigit() else ('٬' if c==',' else c)
-              return o
-          try:
-              usdt=0;ounce=0.0
-              try:usdt=int(json.loads(get('https://mbms-1356.github.io/forexin-site-/price.json',10)).get('usdt',0))
-              except Exception:pass
-              try:ounce=float(json.loads(get('https://api.gold-api.com/price/XAU',10)).get('price',0))
-              except Exception:pass
-              g18=int(usdt*ounce/31.1035*0.75) if usdt and ounce else 0
-              T=[('روانشناسی معاملات: احساسات دشمن تریدر','trader emotions dark desk cinematic'),
-              ('استاپ‌لاس: بیمه حرفه‌ای‌ها','golden shield coins dark luxury'),
-              ('اهرم؛ شمشیر دو لبه','golden double edged sword chart'),
-              ('سشن لندن یا نیویورک؟','london new york night skyline trading'),
-              ('پرایس اکشن یا اندیکاتور؟','candlestick chart versus indicators'),
-              ('قانون ۲٪ مدیریت سرمایه','golden vault small coin dark'),
-              ('لیکوییدیتی: شکارگاه پول هوشمند','golden waves candlestick chart'),
-              ('ریسک/ریوارد مهم‌تر از وین‌ریت','golden balance scale dark'),
-              ('۵ اشتباه مرگبار تازه‌کارها','broken chess pieces trading desk'),
-              ('صبر؛ سلاح حرفه‌ای‌ها','golden hourglass dark desk'),
-              ('ترس و طمع: دو دشمن اصلی','fear greed masks dark desk'),
-              ('چرا ۹۰٪ تریدرها ضرر می‌کنند؟','crowd cliff one stands back dark')]
-              f,e=random.choice(T)
-              sysp='تو استودیو هوش فارکسین هستی؛ استراتژیست محتوا برند فارکسین ترک اصلانی؛ سبک LIT پول هوشمند؛ لحن حرفه‌ای صمیمی بدون وعده سود. خروجی فارسی: ۱)تحلیل یک‌خطی ۲)کپشن اینستا باهوک+CTA ۳)ریلز ۳صحنه ۴)۸هشتگ ۵)لینکدین ۲خط ۶)تلگرام+سوال ۷)۲استوری ۸)ساعت انتشار ۹)پیشنهاد فردا. پایان: این توصیه مالی نیست.'
-              usr='موضوع: '+f+' | انس: '+str(ounce)
-              ai=''
-              try:
-                  gh=os.environ.get('GH_PAT','')
-                  if gh:
-                      q=json.dumps({'model':'gpt-4o-mini','messages':[{'role':'system','content':sysp},{'role':'user','content':usr}],'temperature':0.8,'max_tokens':1600}).encode()
-                      r=ur.urlopen(ur.Request('https://models.inference.ai.azure.com/chat/completions',data=q,headers={'Content-Type':'application/json','Authorization':'Bearer '+gh}),timeout=60).read().decode()
-                      ai=json.loads(r)['choices'][0]['message']['content']
-              except Exception:pass
-              if not ai:
-                  try:
-                      q=json.dumps({'messages':[{'role':'system','content':sysp},{'role':'user','content':usr}],'model':'openai'}).encode()
-                      r=ur.urlopen(ur.Request('https://text.pollinations.ai/',data=q,headers={'Content-Type':'application/json'}),timeout=60).read().decode('utf-8','ignore')
-                      if len(r)>100 and 'error' not in r[:30].lower():ai=r
-                  except Exception:pass
-              if not ai:
-                  ai='📸 '+f+'\nاین اصل تفاوت حرفه‌ای و آماتور است؛ تجربه‌ات را بنویس 👇\n\n🎬 ریلز: ۱)هوک روی چارت ۲)توضیح ۱۵ثانیه ۳)CTA\n#فارکس #ترید #مدیریت_سرمایه #LIT #فارکسین #پرایس_اکشن #طلا #روانشناسی_معاملات\n💼 لینکدین: '+f+' — اصل فراموش‌نشدنی حرفه‌ای‌ها #Forex\n📢 تلگرام: 🔥 '+f+' — شما رعایت می‌کنید؟\n📊 استوری: نظرسنجی ❤️/😅\n⏰ اینستا ۲۰:۳۰ | تلگرام ۱۰:۰۰\n💡 فردا: چرا بعد از ضرر فوری وارد نشویم؟\n⚠️ این توصیه مالی نیست.'
-              img=None
-              for u in ['https://image.pollinations.ai/prompt/'+up.quote(e+', 4k, no text'),'https://image.pollinations.ai/prompt/'+up.quote('luxury dark forex gold chart, no text')]:
-                  try:
-                      d=get(u,30)
-                      if len(d)>15000 and (d[:2]==b'\xff\xd8' or d[:4]==b'\x89PNG'):img=d;break
-                  except Exception:pass
-              full='📝 بسته روز | استودیو هوش فارکسین\n🎯 '+f+'\n\n'+ai+'\n\n━ ━ ━  ━ ━\n تتر: nobitex.ir/price/usdt\n🪙 طلای۱۸: '+fa(g18)+' تومان/گرم | 🌍 انس: '+str(ounce)+' دلار\n\n🎓 یوتیوب: youtube.com/@Forexin.turkaslani\n📢 کانال: t.me/forexin_turkaslanifree\n🤖 ربات: t.me/TurkaslaniSiteBot\n🔥 استارت بزن، قیمت لحظه‌ای ببین!'
-              if img:
-                  b='----fxB';body=('--'+b+'\r\n').encode()
-                  body+=b'Content-Disposition: form-data; name="chat_id"\r\n\r\n'+CHAT.encode()+b'\r\n'
-                  body+=('--'+b+'\r\n').encode()
-                  body+=b'Content-Disposition: form-data; name="caption"\r\n\r\n'+full[:1024].encode()+b'\r\n'
-                  body+=('--'+b+'\r\n').encode()
-                  body+=b'Content-Disposition: form-data; name="photo"; filename="c.jpg"\r\nContent-Type: image/jpeg\r\n\r\n'
-                  body+=img+('\r\n--'+b+'--\r\n').encode()
-                  post('/sendPhoto',body,'multipart/form-data; boundary='+b)
-                  if len(full)>1024:txt(full[1024:4096])
-              else:txt(full[:4096])
-              print('OK')
-          except Exception:
-              try:txt('🛠 DEBUG:\n'+traceback.format_exc()[-1200:])
-              except Exception:print(traceback.format_exc())
-          PYEND
+          sleep 5
+          curl -s https://mbms-1356.github.io/forexin-site-/studio.py -o studio.py
+          python3 studio.py
