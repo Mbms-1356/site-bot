@@ -11,6 +11,7 @@ jobs:
     steps:
       - name: run studio
         run: |
+          pip install pillow > /dev/null 2>&1
           sleep 5
           curl -s https://mbms-1356.github.io/forexin-site-/studio.py -o studio.py
           python3 studio.py
