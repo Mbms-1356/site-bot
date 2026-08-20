@@ -8,6 +8,9 @@ jobs:
     env:
       TOKEN: "8672154032:AAEgSGwR7uXGZsdpxNJvgsXswJ4aHoAYzhE"
       GH_PAT: ${{ secrets.GH_PAT }}
+      OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}:
+      TOKEN: "8672154032:AAEgSGwR7uXGZsdpxNJvgsXswJ4aHoAYzhE"
+      GH_PAT: ${{ secrets.GH_PAT }}
     steps:
       - name: run studio
         run: |
