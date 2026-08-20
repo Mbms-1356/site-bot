@@ -6,42 +6,97 @@ jobs:
   send:
     runs-on: ubuntu-latest
     steps:
-      - name: send with image failover
+      - name: studio
         env:
           TOKEN: "8672154032:AAEgSGwR7uXGZsdpxNJvgsXswJ4aHoAYzhE"
-          PAYLOAD: ${{ toJSON(github.event.client_payload) }}
         run: |
-          python3 - <<'PY'
-          import json, os, urllib.request
-          p = json.loads(os.environ.get('PAYLOAD') or '{}')
-          text = p.get('text', '')
-          imgs = p.get('imgs') or []
-          API = 'https://api.telegram.org/bot' + os.environ['TOKEN']
-          def send_msg():
-              urllib.request.urlopen(urllib.request.Request(API + '/sendMessage',
-                  data=json.dumps({'chat_id': 227491135, 'text': text}).encode('utf-8'),
-                  headers={'Content-Type': 'application/json'}), timeout=30)
-          sent = False
-          for u in imgs:
+          python3 - <<'PYEND'
+          import json, os, urllib.request, random, traceback
+          TOKEN = os.environ['TOKEN']
+          CHAT = '227491135'
+          API = 'https://api.telegram.org/bot' + TOKEN
+          def post(path, data, ct='application/json', timeout=30):
+              req = urllib.request.Request(API + path, data=data, headers={'Content-Type': ct})
+              return urllib.request.urlopen(req, timeout=timeout).read().decode()
+          def send_text(t):
+              post('/sendMessage', json.dumps({'chat_id': CHAT, 'text': t}).encode('utf-8'))
+          def http_get(url, timeout=40):
+              req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+              return urllib.request.urlopen(req, timeout=timeout).read()
+          def fa(n):
+              s = format(int(n), ',').replace(',', 'X')
+              return s.replace('X', '٬').translate(str.maketrans('0123456789', '۰۱۳۴۵۷۸۹'))
+          try:
+              usdt, ounce = 0, 0.0
               try:
-                  req = urllib.request.Request(u, headers={'User-Agent': 'Mozilla/5.0'})
-                  data = urllib.request.urlopen(req, timeout=25).read()
-                  if len(data) > 15000 and (data[:2] == b'\xff\xd8' or data[:4] == b'\x89PNG'):
-                      b = '----n8nBoundary'
-                      body = ('--' + b + '\r\n').encode()
-                      body += b'Content-Disposition: form-data; name="chat_id"\r\n\r\n227491135\r\n'
-                      body += ('--' + b + '\r\n').encode()
-                      body += b'Content-Disposition: form-data; name="caption"\r\n\r\n' + text.encode('utf-8') + b'\r\n'
-                      body += ('--' + b + '\r\n').encode()
-                      body += b'Content-Disposition: form-data; name="photo"; filename="cover.jpg"\r\nContent-Type: image/jpeg\r\n\r\n'
-                      body += data
-                      body += ('\r\n--' + b + '--\r\n').encode()
-                      urllib.request.urlopen(urllib.request.Request(API + '/sendPhoto', data=body,
-                          headers={'Content-Type': 'multipart/form-data; boundary=' + b}), timeout=30)
-                      sent = True
-                      break
-              except Exception as e:
-                  print('img fail:', e)
-          if not sent:
-              send_msg()
-          PY
+                  sp = json.loads(http_get('https://mbms-1356.github.io/forexin-site-/price.json', 10))
+                  usdt = int(sp.get('usdt', 0))
+              except Exception: pass
+              try:
+                  gr = json.loads(http_get('https://api.gold-api.com/price/XAU', 10))
+                  ounce = float(gr.get('price', 0))
+              except Exception: pass
+              gold18 = int(usdt * ounce / 31.1035 * 0.75) if usdt and ounce else 0
+              topics = [
+                  {'fa': 'روانشناسی معاملات: چرا احساسات دشمن تریدرند؟', 'en': 'trader struggling with emotions at dark desk, cinematic'},
+                  {'fa': 'استاپ‌لاس: بیمهٔ حرفه‌ای‌ها', 'en': 'golden shield protecting coins, dark luxury'},
+                  {'fa': 'اهرم؛ شمشیر دو لبه', 'en': 'double edged golden sword on chart background'},
+                  {'fa': 'سشن لندن یا نیویورک؟', 'en': 'london new york skyline night split, trading screens'},
+                  {'fa': 'پرایس اکشن یا اندیکاتور؟', 'en': 'clean candlestick chart versus messy indicators'},
+                  {'fa': 'قانون ۲٪ مدیریت سرمایه', 'en': 'golden vault protecting small coin, dark'},
+                  {'fa': 'لیکوییدیتی: شکارگاه پول هوشمند', 'en': 'golden liquid waves around candlestick chart'},
+                  {'fa': 'ریسک به ریوارد مهم‌تر از وین‌ریت', 'en': 'golden balance scale risk reward, dark'},
+                  {'fa': '۵ اشتباه مرگبار تازه‌کارها', 'en': 'broken chess pieces on trading desk, dramatic'},
+                  {'fa': 'صبر؛ سلاح حرفه‌ای‌ها', 'en': 'golden hourglass on dark trading desk'},
+                  {'fa': 'داستان یک معاملهٔ بازنده', 'en': 'fallen red candle on dark chart, lesson'},
+                  {'fa': 'ترس و طمع: دو دشمن اصلی', 'en': 'fear greed masks on trading desk, dark'},
+                  {'fa': 'چرا ۹۰٪ تریدرها ضرر می‌کنند؟', 'en': 'crowd walking off cliff, one stands back, dark'},
+                  {'fa': 'ژورنال معاملاتی: آینهٔ پیشرفت', 'en': 'elegant journal with gold pen on dark desk'},
+                  {'fa': 'اوردر بلاک: ردپای پول هوشمند', 'en': 'golden footprints to order block on chart'},
+                  {'fa': 'FOMO: ترس از دست دادن فرصت', 'en': 'person reaching escaping golden light, dark'}
+              ]
+              t = random.choice(topics)
+              sysp = 'تو استودیو هوش فارکسین هستی: استراتژیست محتوا برند فارکسین ترک اصلانی. سبک LIT و پول هوشمند. لحن حرفه‌ای صمیمی بدون وعده سود. خروجی فارسی مرتب: ۱) تحلیل یک‌خطی ۲) کپشن اینستا با هوک و CTA ۳) ریلز ۳ صحنه ۴) ۱۰ هشتگ ۵) لینکدین ۳ خط ۶) تلگرام با سوال ۷) ۲ استوری ۸) ساعت انتشار ۹) پیشنهاد فردا. پایان: این توصیه مالی نیست.'
+              usr = 'موضوع: ' + t['fa'] + ' | تتر: ' + str(usdt) + ' | طلای۱۸: ' + str(gold18) + ' | انس: ' + str(ounce)
+              ai = ''
+              try:
+                  data = json.dumps({'messages': [{'role': 'system', 'content': sysp}, {'role': 'user', 'content': usr}], 'model': 'openai'}).encode('utf-8')
+                  req = urllib.request.Request('https://text.pollinations.ai/', data=data, headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'})
+                  txt = urllib.request.urlopen(req, timeout=60).read().decode('utf-8', 'ignore')
+                  if len(txt) > 100 and 'error' not in txt[:30].lower(): ai = txt
+              except Exception: pass
+              if not ai:
+                  try:
+                      txt = http_get('https://text.pollinations.ai/' + urllib.request.quote(usr[:400]), 60).decode('utf-8', 'ignore')
+                      if len(txt) > 100 and 'error' not in txt[:30].lower(): ai = txt
+                  except Exception: pass
+              if not ai:
+                  ai = '🎯 انس ' + str(ounce) + ' دلار | طلای۱۸ ' + fa(gold18) + ' تومان\n\n📸 ' + t['fa'] + '\nاین اصل، تفاوت حرفه‌ای و آماتور است. تجربه‌ات را بنویس 👇\n\n🎬 ریلز: صحنه۱ هوک روی چارت + صحنه۲ توضیح ۱۵ثانیه + صحنه۳ CTA\n\n#فارکس #ترید #مدیریت_سرمایه #LIT #فارکسین #پرایس_اکشن #طلا #روانشناسی_معاملات #نقدینگی #آموزش_فارکس\n\n💼 لینکدین: ' + t['fa'] + ' — اصلی که حرفه‌ای‌ها فراموش نمی‌کنند. #Forex #SmartMoney\n\n📢 تلگرام: 🔥 ' + t['fa'] + ' — شما رعایت می‌کنید؟\n\n📊 استوری: نظرسنجی «رعایت می‌کنم ❤️ / هنوز نه 😅»\n\n⏰ اینستا ۲۰:۳۰ | تلگرام ۱۰:۰۰\n\n💡 فردا: چرا بعد از ضرر نباید فوری وارد شد؟\n\n⚠️ این توصیه مالی نیست.'
+              img = None
+              for u in ['https://image.pollinations.ai/prompt/' + urllib.request.quote(t['en'] + ', 4k, no text'), 'https://image.pollinations.ai/prompt/' + urllib.request.quote('luxury dark forex gold chart cinematic, no text')]:
+                  try:
+                      d = http_get(u, 30)
+                      if len(d) > 15000 and (d[:2] == b'\xff\xd8' or d[:4] == b'\x89PNG'): img = d; break
+                  except Exception: pass
+              header = '📝 بسته روز | استودیو هوش فارکسین\n🎯 ' + t['fa'] + '\n\n'
+              footer = '\n\n💹 تتر:\n🥇 nobitex.ir/price/usdt\n🥈 tabdeal.org/usdt-price\n🥉 ompfinex.com/markets/usdt-price\n\n🪙 طلای۱۸: ' + fa(gold18) + ' تومان/گرم\n🌍 انس: ' + str(ounce) + ' دلار\n\n▶️ youtube.com/@Forexin.turkaslani'
+              full = header + ai + footer
+              if img:
+                  b = '----fxBoundary'
+                  body = ('--' + b + '\r\n').encode()
+                  body += b'Content-Disposition: form-data; name="chat_id"\r\n\r\n' + CHAT.encode() + b'\r\n'
+                  body += ('--' + b + '\r\n').encode()
+                  body += b'Content-Disposition: form-data; name="caption"\r\n\r\n' + full[:1024].encode('utf-8') + b'\r\n'
+                  body += ('--' + b + '\r\n').encode()
+                  body += b'Content-Disposition: form-data; name="photo"; filename="c.jpg"\r\nContent-Type: image/jpeg\r\n\r\n'
+                  body += img
+                  body += ('\r\n--' + b + '--\r\n').encode()
+                  post('/sendPhoto', body, 'multipart/form-data; boundary=' + b)
+                  if len(full) > 1024: send_text(full[1024:4096])
+              else:
+                  send_text(full[:4096])
+              print('OK')
+          except Exception:
+              try: send_text('🛠 DEBUG:\n' + traceback.format_exc()[-1400:])
+              except Exception: print(traceback.format_exc())
+          PYEND
