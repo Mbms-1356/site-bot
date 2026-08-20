@@ -6,18 +6,44 @@ jobs:
   send:
     runs-on: ubuntu-latest
     steps:
-      - name: send via agent bot
+      - name: send photo + caption
         env:
           TOKEN: "8672154032:AAEgSGwR7uXGZsdpxNJvgsXswJ4aHoAYzhE"
           PAYLOAD: ${{ toJSON(github.event.client_payload) }}
         run: |
           python3 - <<'PY'
-          import json, os, urllib.request
+          import json, os, urllib.request, io
           p = json.loads(os.environ.get('PAYLOAD') or '{}')
           text = p.get('text', '')
-          req = urllib.request.Request(
-              'https://api.telegram.org/bot' + os.environ['TOKEN'] + '/sendMessage',
-              data=json.dumps({'chat_id': 227491135, 'text': text}).encode('utf-8'),
-              headers={'Content-Type': 'application/json'})
-          print(urllib.request.urlopen(req, timeout=30).read().decode())
+          img = p.get('img', '')
+          if img:
+              try:
+                  req = urllib.request.Request(img, headers={'User-Agent': 'Mozilla/5.0'})
+                  data = io.BytesIO(urllib.request.urlopen(req, timeout=20).read())
+                  boundary = '----n8nBoundary'
+                  body = b''
+                  body += ('--' + boundary + '\r\n').encode()
+                  body += b'Content-Disposition: form-data; name="chat_id"\r\n\r\n227491135\r\n'
+                  body += ('--' + boundary + '\r\n').encode()
+                  body += b'Content-Disposition: form-data; name="caption"\r\n\r\n' + text.encode('utf-8') + b'\r\n'
+                  body += ('--' + boundary + '\r\n').encode()
+                  body += b'Content-Disposition: form-data; name="photo"; filename="cover.jpg"\r\nContent-Type: image/jpeg\r\n\r\n'
+                  body += data.read()
+                  body += ('\r\n--' + boundary + '--\r\n').encode()
+                  req2 = urllib.request.Request(
+                      'https://api.telegram.org/bot' + os.environ['TOKEN'] + '/sendPhoto',
+                      data=body,
+                      headers={'Content-Type': 'multipart/form-data; boundary=' + boundary})
+                  print(urllib.request.urlopen(req2, timeout=30).read().decode())
+              except Exception as e:
+                  print('img fail:', e)
+                  urllib.request.urlopen(urllib.request.Request(
+                      'https://api.telegram.org/bot' + os.environ['TOKEN'] + '/sendMessage',
+                      data=json.dumps({'chat_id': 227491135, 'text': text}).encode('utf-8'),
+                      headers={'Content-Type': 'application/json'}))
+          else:
+              urllib.request.urlopen(urllib.request.Request(
+                  'https://api.telegram.org/bot' + os.environ['TOKEN'] + '/sendMessage',
+                  data=json.dumps({'chat_id': 227491135, 'text': text}).encode('utf-8'),
+                  headers={'Content-Type': 'application/json'}))
           PY
