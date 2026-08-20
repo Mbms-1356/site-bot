@@ -24,8 +24,17 @@ jobs:
               req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
               return urllib.request.urlopen(req, timeout=timeout).read()
           def fa(n):
-              s = format(int(n), ',').replace(',', 'X')
-              return s.replace('X', '٬').translate(str.maketrans('0123456789', '۰۱۲۴۵۶۷۸۹'))
+              d = '۰۱۳۴۵۷۸۹'
+              s = format(int(n), ',')
+              out = ''
+              for ch in s:
+                  if ch.isdigit():
+                      out += d[int(ch)]
+                  elif ch == ',':
+                      out += '٬'
+                  else:
+                      out += ch
+              return out
           try:
               usdt, ounce = 0, 0.0
               try:
@@ -61,42 +70,4 @@ jobs:
               ai = ''
               try:
                   data = json.dumps({'messages': [{'role': 'system', 'content': sysp}, {'role': 'user', 'content': usr}], 'model': 'openai'}).encode('utf-8')
-                  req = urllib.request.Request('https://text.pollinations.ai/', data=data, headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'})
-                  txt = urllib.request.urlopen(req, timeout=60).read().decode('utf-8', 'ignore')
-                  if len(txt) > 100 and 'error' not in txt[:30].lower(): ai = txt
-              except Exception: pass
-              if not ai:
-                  try:
-                      txt = http_get('https://text.pollinations.ai/' + urllib.request.quote(usr[:400]), 60).decode('utf-8', 'ignore')
-                      if len(txt) > 100 and 'error' not in txt[:30].lower(): ai = txt
-                  except Exception: pass
-              if not ai:
-                  ai = '🎯 انس ' + str(ounce) + ' دلار | طلای۱۸ ' + fa(gold18) + ' تومان\n\n📸 ' + t['fa'] + '\nاین اصل، تفاوت حرفه‌ای و آماتور است. تجربه‌ات را بنویس 👇\n\n🎬 ریلز: صحنه۱ هوک روی چارت + صحنه۲ توضیح ۱۵ثانیه + صحنه۳ CTA\n\n#فارکس #ترید #مدیریت_سرمایه #LIT #فارکسین #پرایس_اکشن #طلا #روانشناسی_معاملات #نقدینگی #آموزش_فارکس\n\n💼 لینکدین: ' + t['fa'] + ' — اصلی که حرفه‌ای‌ها فراموش نمی‌کنند. #Forex #SmartMoney\n\n📢 تلگرام: 🔥 ' + t['fa'] + ' — شما رعایت می‌کنید؟\n\n📊 استوری: نظرسنجی «رعایت می‌کنم ❤️ / هنوز نه 😅»\n\n⏰ اینستا ۲۰:۳۰ | تلگرام ۱۰:۰۰\n\n💡 فردا: چرا بعد از ضرر نباید فوری وارد شد؟\n\n⚠️ این توصیه مالی نیست.'
-              img = None
-              for u in ['https://image.pollinations.ai/prompt/' + urllib.request.quote(t['en'] + ', 4k, no text'), 'https://image.pollinations.ai/prompt/' + urllib.request.quote('luxury dark forex gold chart cinematic, no text')]:
-                  try:
-                      d = http_get(u, 30)
-                      if len(d) > 15000 and (d[:2] == b'\xff\xd8' or d[:4] == b'\x89PNG'): img = d; break
-                  except Exception: pass
-              header = '📝 بسته روز | استودیو هوش فارکسین\n🎯 ' + t['fa'] + '\n\n'
-              footer = '\n\n💹 تتر:\n🥇 nobitex.ir/price/usdt\n🥈 tabdeal.org/usdt-price\n🥉 ompfinex.com/markets/usdt-price\n\n🪙 طلای۱۸: ' + fa(gold18) + ' تومان/گرم\n🌍 انس: ' + str(ounce) + ' دلار\n\n▶️ youtube.com/@Forexin.turkaslani'
-              full = header + ai + footer
-              if img:
-                  b = '----fxBoundary'
-                  body = ('--' + b + '\r\n').encode()
-                  body += b'Content-Disposition: form-data; name="chat_id"\r\n\r\n' + CHAT.encode() + b'\r\n'
-                  body += ('--' + b + '\r\n').encode()
-                  body += b'Content-Disposition: form-data; name="caption"\r\n\r\n' + full[:1024].encode('utf-8') + b'\r\n'
-                  body += ('--' + b + '\r\n').encode()
-                  body += b'Content-Disposition: form-data; name="photo"; filename="c.jpg"\r\nContent-Type: image/jpeg\r\n\r\n'
-                  body += img
-                  body += ('\r\n--' + b + '--\r\n').encode()
-                  post('/sendPhoto', body, 'multipart/form-data; boundary=' + b)
-                  if len(full) > 1024: send_text(full[1024:4096])
-              else:
-                  send_text(full[:4096])
-              print('OK')
-          except Exception:
-              try: send_text('🛠 DEBUG:\n' + traceback.format_exc()[-1400:])
-              except Exception: print(traceback.format_exc())
-          PYEND
+                  req = urllib.request.Request('https://text.pollinations.ai/', data=data, headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla
