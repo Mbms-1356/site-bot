@@ -25,7 +25,7 @@ jobs:
               return urllib.request.urlopen(req, timeout=timeout).read()
           def fa(n):
               s = format(int(n), ',').replace(',', 'X')
-              return s.replace('X', '٬').translate(str.maketrans('0123456789', '۰۱۳۴۵۷۸۹'))
+              return s.replace('X', '٬').translate(str.maketrans('0123456789', '۰۱۲۴۵۶۷۸۹'))
           try:
               usdt, ounce = 0, 0.0
               try:
