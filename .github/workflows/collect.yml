@@ -61,17 +61,27 @@ jobs:
                           if o.get('t'):out.append(o)
                       except Exception:pass
               return out
+          # Discover live free models from OpenRouter
+          models=[]
+          if OR:
+              try:
+                  ml=json.loads(get('https://openrouter.ai/api/v1/models',20))
+                  free=[m.get('id','') for m in ml.get('data',[]) if m.get('pricing',{}).get('prompt')=='0' and m.get('pricing',{}).get('completion')=='0']
+                  pref=[m for m in free if any(k in m.lower() for k in ['qwen','llama','mistral','deepseek','gemini','ministral'])]
+                  models=(pref or free)[:4]
+              except Exception as e:
+                  errs.append('list:'+str(e)[:40])
           new=[];ai_used='none'
-          if titles and OR:
-              for m in ['deepseek/deepseek-chat-v3-0324:free','qwen/qwen-2.5-72b-instruct:free','meta-llama/llama-3.3-70b-instruct:free','mistralai/mistral-7b-instruct:free']:
+          if titles and models:
+              for m in models:
                   try:
                       body=json.dumps({'model':m,'messages':[{'role':'user','content':prompt}]}).encode()
                       r=ur.urlopen(ur.Request('https://openrouter.ai/api/v1/chat/completions',data=body,headers={'Content-Type':'application/json','Authorization':'Bearer '+OR,'User-Agent':'forexin'}),timeout=60).read().decode()
                       txt=json.loads(r)['choices'][0]['message']['content']
                       new=parse(txt)
-                      if new:ai_used='openrouter:'+m.split('/')[0];break
+                      if new:ai_used='openrouter:'+m.split('/')[-1];break
                   except Exception as e:
-                      errs.append(m.split('/')[0]+':'+str(e)[:40])
+                      errs.append(m.split('/')[-1]+':'+str(e)[:35])
           if not new and titles:
               for t in titles[:6]:
                   if len(t)>10:new.append({'t':clean(t)[:60],'f':'این مفهوم در متد LIT بررسی می‌شود','h':'قبل از هر ترید این را ببین'})
@@ -96,6 +106,6 @@ jobs:
                   committed=True
               except Exception as e:
                   errs.append('commit:'+str(e)[:80])
-          tell('🔭 تانکر: عناوین '+str(len(titles))+' | AI '+ai_used+' → '+str(len(new))+' | به مخزن '+str(added if committed else 0)+(' | خطا: '+';'.join(errs)[:200] if errs else ''))
-          print('done',ai_used,len(new),committed)
+          tell('🔭 تانکر: عناوین '+str(len(titles))+' | مدل‌ها '+str(len(models))+' | AI '+ai_used+' → '+str(len(new))+' | به مخزن '+str(added if committed else 0)+(' | خطا: '+';'.join(errs)[:200] if errs else ''))
+          print('done',ai_used,models,len(new),committed)
           PYEND
