@@ -18,7 +18,7 @@ jobs:
           import json,os,re,urllib.request as ur,urllib.parse as up,traceback,base64,html as H
           PAT=os.environ.get('GH_PAT','')
           API='https://api.telegram.org/bot'+os.environ['TOKEN']
-          errs=[]
+          errs=[];src_used=[]
           def tell(t):
               try:ur.urlopen(ur.Request(API+'/sendMessage',data=json.dumps({'chat_id':'227491135','text':t}).encode(),headers={'Content-Type':'application/json'}),timeout=20)
               except Exception:pass
@@ -27,56 +27,89 @@ jobs:
           titles=[]
           for fd in ['https://www.babypips.com/feed','https://www.dailyfx.com/feed','https://forexlive.com/feed']:
               try:
-                  x=get(fd,20);ts=re.findall(r'<title>(.*?)</title>',x);titles+=[clean(t) for t in ts[1:6]]
+                  x=get(fd,20);ts=re.findall(r'<title>(.*?)</title>',x);titles+=[clean(t) for t in ts[1:6]];src_used.append(fd.split('/')[2])
               except Exception:pass
           try:
               x=get('https://news.google.com/rss/search?q=forex+trading+OR+gold+price&hl=en-US&gl=US&ceid=US:en',20)
-              titles+=[clean(t) for t in re.findall(r'<item><title>(.*?)</title>',x)[:10]]
+              titles+=[clean(t) for t in re.findall(r'<item><title>(.*?)</title>',x)[:10]];src_used.append('gnews')
           except Exception:pass
           try:
               j=json.loads(get('https://hn.algolia.com/api/v1/search?query=forex&tags=story',15))
-              titles+=[h.get('title','') for h in j.get('hits',[]) if h.get('title')][:8]
+              titles+=[h.get('title','') for h in j.get('hits',[]) if h.get('title')][:8];src_used.append('hn')
           except Exception:pass
           for ch in ['cointelegraph','fxstreet']:
               try:
                   h=get('https://t.me/s/'+ch,20)
-                  titles+=[clean(t) for t in re.findall(r'tgme_widget_message_text[^>]*>(.*?)</div>',h,re.S) if len(clean(t))>30][:5]
+                  titles+=[clean(t) for t in re.findall(r'tgme_widget_message_text[^>]*>(.*?)</div>',h,re.S) if len(clean(t))>30][:5];src_used.append(ch)
               except Exception:pass
           titles=[t for t in titles if len(t)>15][:30]
-          prompt='این عنوان‌های جهانی دربارهٔ فارکس/طلا/پول هوشمند است: '+' | '.join(titles)+' خروجی فقط JSON آرایه بدون توضیح: [{"t":"موضوع فارسی کوتاه","f":"نکتهٔ آموزشی فارسی یک‌خطی","h":"قلاب فارسی جذاب"}] حداقل ۶ مورد.'
-          new=[]
-          if titles:
-              for attempt in range(2):
+          prompt='عنوان‌های جهانی دربارهٔ فارکس/طلا/پول هوشمند: '+' | '.join(titles)+' خروجی فقط JSON آرایه بدون هیچ متن دیگر: [{"t":"موضوع فارسی کوتاه","f":"نکتهٔ آموزشی فارسی یک‌خطی","h":"قلاب فارسی جذاب"}] حداقل ۶ مورد.'
+          new=[];ai_used='none'
+          def parse(txt):
+              out=[]
+              txt=txt.replace('```json','').replace('```','')
+              i=txt.find('[');j=txt.rfind(']')
+              if i>=0 and j>i:
                   try:
-                      if attempt==0:
-                          r=ur.urlopen(ur.Request('https://models.inference.ai.azure.com/chat/completions',data=json.dumps({'model':'gpt-4o-mini','messages':[{'role':'user','content':prompt}],'temperature':0.7}).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+PAT}),timeout=60).read().decode()
-                          txt=json.loads(r)['choices'][0]['message']['content']
-                      else:
-                          txt=ur.urlopen(ur.Request('https://text.pollinations.ai/',data=json.dumps({'messages':[{'role':'user','content':prompt}],'model':'openai'}).encode(),headers={'Content-Type':'application/json'}),timeout=60).read().decode('utf-8','ignore')
-                      txt=txt.replace('```json','').replace('```','')
-                      i=txt.find('[');j=txt.rfind(']')
-                      try:new=json.loads(txt[i:j+1])
+                      arr=json.loads(txt[i:j+1])
+                      for o in arr:
+                          if isinstance(o,dict) and o.get('t'):out.append(o)
+                  except Exception:pass
+              if not out:
+                  for m in re.findall(r'\{[^{}]{10,300}\}',txt):
+                      try:
+                          o=json.loads(m)
+                          if o.get('t'):out.append(o)
                       except Exception:pass
-                      if not new:
-                          for m in re.findall(r'\{[^{}]+\}',txt):
-                              try:
-                                  o=json.loads(m)
-                                  if o.get('t'):new.append(o)
-                              except Exception:pass
-                      if new:break
+              return out
+          if titles:
+              # Try 1: GitHub Models with correct endpoint
+              if PAT:
+                  try:
+                      body=json.dumps({'model':'gpt-4o-mini','messages':[{'role':'user','content':prompt}],'temperature':0.7}).encode()
+                      r=ur.urlopen(ur.Request('https://models.github.ai/inference/chat/completions',data=body,headers={'Content-Type':'application/json','Authorization':'Bearer '+PAT,'User-Agent':'n8n'}),timeout=60).read().decode()
+                      j=json.loads(r);txt=j['choices'][0]['message']['content']
+                      new=parse(txt)
+                      if new:ai_used='github_models'
                   except Exception as e:
-                      errs.append('ai%d:%s'%(attempt,str(e)[:60]))
+                      errs.append('gh:'+str(e)[:50])
+              # Try 2: Pollinations GET (anonymous)
+              if not new:
+                  try:
+                      url='https://text.pollinations.ai/'+up.quote(prompt[:1500])
+                      txt=get(url,60)
+                      new=parse(txt)
+                      if new:ai_used='pollinations_get'
+                  except Exception as e:
+                      errs.append('poll:'+str(e)[:50])
+              # Try 3: Pollinations POST with model specified
+              if not new:
+                  try:
+                      body=json.dumps({'messages':[{'role':'user','content':prompt}],'model':'openai','private':False}).encode()
+                      r=ur.urlopen(ur.Request('https://text.pollinations.ai/',data=body,headers={'Content-Type':'application/json','User-Agent':'Mozilla/5.0'}),timeout=60).read().decode('utf-8','ignore')
+                      new=parse(r)
+                      if new:ai_used='pollinations_post'
+                  except Exception as e:
+                      errs.append('poll2:'+str(e)[:50])
+              # Fallback 4: Build from titles ourselves (no AI)
+              if not new:
+                  new=[]
+                  for t in titles[:8]:
+                      if len(t)>10:
+                          new.append({'t':clean(t)[:60],'f':'این مفهوم در متد LIT بررسی می‌شود','h':'قبل از هر ترید این را ببین'})
+                  if new:ai_used='fallback_titles'
           committed=False
           if new and PAT:
               try:
                   vault={'principles':[],'quotes':[],'hooks':[],'lit_facts':[]}
                   try:vault.update(json.loads(get('https://mbms-1356.github.io/forexin-site-/vault.json',15)))
                   except Exception:pass
+                  added=0
                   for it in new:
-                      if it.get('t') and it['t'] not in vault['principles']:vault['principles'].append(it['t'])
+                      if it.get('t') and it['t'] not in vault['principles']:vault['principles'].append(it['t']);added+=1
                       if it.get('f') and it['f'] not in vault['lit_facts']:vault['lit_facts'].append(it['f'])
                       if it.get('h') and it['h'] not in vault['hooks']:vault['hooks'].append(it['h'])
-                  for k in vault:vault[k]=vault[k][-60:]
+                  for k in vault:vault[k]=vault[k][-80:]
                   body={'message':'vault auto-enrich','content':base64.b64encode(json.dumps(vault,ensure_ascii=False).encode()).decode()}
                   try:
                       old=json.loads(get('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/vault.json',15))
@@ -86,6 +119,6 @@ jobs:
                   committed=True
               except Exception as e:
                   errs.append('commit:'+str(e)[:80])
-          tell('🔭 تانکر: عناوین: '+str(len(titles))+' | استخراج AI: '+str(len(new))+' | به مخزن: '+str(len(new) if committed else 0)+(' | خطا: '+';'.join(errs)[:250] if errs else ''))
-          print('done',len(titles),len(new),committed,errs)
+          tell('🔭 تانکر: عناوین '+str(len(titles))+' | AI '+ai_used+' → استخراج '+str(len(new))+' | به مخزن '+str(added if committed else 0)+(' | خطا: '+';'.join(errs)[:200] if errs else ''))
+          print('done',ai_used,len(titles),len(new),committed)
           PYEND
