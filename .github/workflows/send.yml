@@ -9,6 +9,7 @@ jobs:
       - name: studio
         env:
           TOKEN: "8672154032:AAEgSGwR7uXGZsdpxNJvgsXswJ4aHoAYzhE"
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           python3 - <<'PYEND'
           import json,os,urllib.request as ur,urllib.parse as up,random,traceback
@@ -45,10 +46,18 @@ jobs:
               usr='موضوع: '+f+' | انس: '+str(ounce)
               ai=''
               try:
-                  q=json.dumps({'messages':[{'role':'system','content':sysp},{'role':'user','content':usr}],'model':'openai'}).encode()
-                  r=ur.urlopen(ur.Request('https://text.pollinations.ai/',data=q,headers={'Content-Type':'application/json'}),timeout=60).read().decode('utf-8','ignore')
-                  if len(r)>100 and 'error' not in r[:30].lower():ai=r
+                  gh=os.environ.get('GH_PAT','')
+                  if gh:
+                      q=json.dumps({'model':'gpt-4o-mini','messages':[{'role':'system','content':sysp},{'role':'user','content':usr}],'temperature':0.8,'max_tokens':1600}).encode()
+                      r=ur.urlopen(ur.Request('https://models.inference.ai.azure.com/chat/completions',data=q,headers={'Content-Type':'application/json','Authorization':'Bearer '+gh}),timeout=60).read().decode()
+                      ai=json.loads(r)['choices'][0]['message']['content']
               except Exception:pass
+              if not ai:
+                  try:
+                      q=json.dumps({'messages':[{'role':'system','content':sysp},{'role':'user','content':usr}],'model':'openai'}).encode()
+                      r=ur.urlopen(ur.Request('https://text.pollinations.ai/',data=q,headers={'Content-Type':'application/json'}),timeout=60).read().decode('utf-8','ignore')
+                      if len(r)>100 and 'error' not in r[:30].lower():ai=r
+                  except Exception:pass
               if not ai:
                   ai='📸 '+f+'\nاین اصل تفاوت حرفه‌ای و آماتور است؛ تجربه‌ات را بنویس 👇\n\n🎬 ریلز: ۱)هوک روی چارت ۲)توضیح ۱۵ثانیه ۳)CTA\n#فارکس #ترید #مدیریت_سرمایه #LIT #فارکسین #پرایس_اکشن #طلا #روانشناسی_معاملات\n💼 لینکدین: '+f+' — اصل فراموش‌نشدنی حرفه‌ای‌ها #Forex\n📢 تلگرام: 🔥 '+f+' — شما رعایت می‌کنید؟\n📊 استوری: نظرسنجی ❤️/😅\n⏰ اینستا ۲۰:۳۰ | تلگرام ۱۰:۰۰\n💡 فردا: چرا بعد از ضرر فوری وارد نشویم؟\n⚠️ این توصیه مالی نیست.'
               img=None
@@ -57,7 +66,7 @@ jobs:
                       d=get(u,30)
                       if len(d)>15000 and (d[:2]==b'\xff\xd8' or d[:4]==b'\x89PNG'):img=d;break
                   except Exception:pass
-              full='📝 بسته روز | استودیو هوش فارکسین\n🎯 '+f+'\n\n'+ai+'\n\n━ ━ ━  ━ ━\n💹 تتر: nobitex.ir/price/usdt\n🪙 طلای۱۸: '+fa(g18)+' تومان/گرم | 🌍 انس: '+str(ounce)+' دلار\n\n🎓 یوتیوب: youtube.com/@Forexin.turkaslani\n📢 کانال: t.me/forexin_turkaslanifree\n🤖 ربات: t.me/TurkaslaniSiteBot\n🔥 استارت بزن، قیمت لحظه‌ای ببین!'
+              full='📝 بسته روز | استودیو هوش فارکسین\n🎯 '+f+'\n\n'+ai+'\n\n━ ━ ━  ━ ━\n تتر: nobitex.ir/price/usdt\n🪙 طلای۱۸: '+fa(g18)+' تومان/گرم | 🌍 انس: '+str(ounce)+' دلار\n\n🎓 یوتیوب: youtube.com/@Forexin.turkaslani\n📢 کانال: t.me/forexin_turkaslanifree\n🤖 ربات: t.me/TurkaslaniSiteBot\n🔥 استارت بزن، قیمت لحظه‌ای ببین!'
               if img:
                   b='----fxB';body=('--'+b+'\r\n').encode()
                   body+=b'Content-Disposition: form-data; name="chat_id"\r\n\r\n'+CHAT.encode()+b'\r\n'
