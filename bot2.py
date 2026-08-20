@@ -1,4 +1,5 @@
 import os, json, threading, time as _t, re, urllib.request, urllib.parse, ssl, html
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 import telebot
 from telebot import types
@@ -174,7 +175,7 @@ WELCOME_GROUP = '''سلام {first} عزیز! 🌟
 
 ⚠️ مطالب آموزشی | 🚫 لینک/تبلیغ ممنوع.'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦', 'CAD': '🇦', 'CHF': '🇨🇭', 'NZD': '🇳'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -253,18 +254,12 @@ def nobitex_parse(body):
     raise Exception('range')
 
 def get_usdt_only():
-    results = []
     errs = []
-    def add(name, fn):
-        try:
-            p = fn()
-            if p and 100000 < p < 400000:
-                results.append((name, p))
-        except Exception as e:
-            errs.append(f"{name}: {str(e)[:30]}")
-    add('نوبیتکس‌زنده', lambda: nobitex_parse(fetch_text(NOBITEX_API, timeout=8)))
-    add('نوبیتکس‌پ۱', lambda: nobitex_parse(fetch_text('https://api.allorigins.win/raw?url=' + urllib.parse.quote(NOBITEX_API, safe=''), timeout=10)))
-    add('نوبیتکس‌پ۲', lambda: nobitex_parse(fetch_text('https://corsproxy.io/?url=' + urllib.parse.quote(NOBITEX_API, safe=''), timeout=10)))
+    site_p = None
+    def nobitex_direct():
+        return nobitex_parse(fetch_text(NOBITEX_API, timeout=10))
+    def px(prefix, timeout=22):
+        return nobitex_parse(fetch_text(prefix + urllib.parse.quote(NOBITEX_API, safe=''), timeout=timeout))
     def site_price():
         d = json.loads(fetch_text(SITE + 'price.json?t=' + str(int(_t.time())), timeout=8))
         p = int(d.get('usdt') or 0)
@@ -287,12 +282,29 @@ def get_usdt_only():
             except Exception:
                 continue
         raise Exception('p2p')
-    add('سایت‌خودی', site_price)
-    add('بایننسP2P', binance_p2p)
-    if results:
-        name, p = results[0]
-        save_usdt_cache(p, name)
-        return f"🇮 <b>قیمت لحظه‌ای بازار ایران:</b>\n💵 تتر: {p:,} تومان{gold18_text(p)}\n🏦 منبع: {name}\n<i>🤖 Forexin Bot</i>"
+    jobs = {
+        'نوبیتکس‌زنده': nobitex_direct,
+        'نوبیتکس‌پ۱': lambda: px('https://api.allorigins.win/raw?url='),
+        'نوبیتکس‌پ۲': lambda: px('https://corsproxy.io/?url='),
+        'بایننسP2P': binance_p2p,
+        'سایت‌خودی': site_price,
+    }
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futs = {ex.submit(fn): name for name, fn in jobs.items()}
+        for f in as_completed(futs):
+            name = futs[f]
+            try:
+                p = f.result()
+            except Exception as e:
+                errs.append(f"{name}: {str(e)[:25]}")
+                continue
+            if name == 'سایت‌خودی':
+                site_p = p
+                continue
+            save_usdt_cache(p, name)
+            return f"🇮🇷 <b>قیمت لحظه‌ای بازار ایران:</b>\n💵 تتر: {p:,} تومان{gold18_text(p)}\n🏦 منبع: {name} ⚡\n<i>🤖 Forexin Bot</i>"
+    if site_p:
+        return f"🇮🇷 <b>قیمت بازار ایران:</b>\n💵 تتر: {site_p:,} تومان{gold18_text(site_p)}\n📌 قیمت پایه (مدیریت) — source زنده در دسترس نیست\n<i>🤖 Forexin Bot</i>"
     if USDT_CACHE.get('price'):
         age = int(_t.time()) - USDT_CACHE.get('ts', 0)
         if age < 24 * 3600:
