@@ -1,0 +1,76 @@
+name: collect2
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 12 * * *'
+jobs:
+  collect2:
+    runs-on: ubuntu-latest
+    env:
+      GH_PAT: ${{ secrets.GH_PAT }}
+      TOKEN: "8672154032:AAEgSGwR7uXGZsdpxNJvgsXswJ4aHoAYzhE"
+    steps:
+      - name: tanker2
+        run: |
+          python3 - <<'PYEND'
+          import json,os,re,urllib.request as ur,urllib.parse as up,traceback,base64,html as H
+          PAT=os.environ.get('GH_PAT','')
+          API='https://api.telegram.org/bot'+os.environ['TOKEN']
+          def tell(t):
+              try:ur.urlopen(ur.Request(API+'/sendMessage',data=json.dumps({'chat_id':'227491135','text':t}).encode(),headers={'Content-Type':'application/json'}),timeout=20)
+              except Exception:pass
+          def get(u,t=30):return ur.urlopen(ur.Request(u,headers={'User-Agent':'Mozilla/5.0'}),timeout=t).read().decode('utf-8','ignore')
+          def clean(x):return H.unescape(re.sub('<[^>]+>','',x)).strip()
+          titles=[]
+          try:
+              x=get('https://news.google.com/rss/search?q=forex+trading+OR+gold+price&hl=en-US&gl=US&ceid=US:en',20)
+              titles+=[clean(t) for t in re.findall(r'<item><title>(.*?)</title>',x)][:10]
+          except Exception:pass
+          try:
+              j=json.loads(get('https://hn.algolia.com/api/v1/search?query=forex&tags=story',15))
+              titles+=[h.get('title','') for h in j.get('hits',[]) if h.get('title')][:8]
+          except Exception:pass
+          for ch in ['cointelegraph','fxstreet','coindesk']:
+              try:
+                  h=get('https://t.me/s/'+ch,20)
+                  titles+=[clean(t) for t in re.findall(r'tgme_widget_message_text[^>]*>(.*?)</div>',h,re.S) if len(clean(t))>30][:6]
+              except Exception:pass
+          titles=[t for t in titles if len(t)>15][:25]
+          prompt='این عنوان‌ها و پست‌های رقبا دربارهٔ فارکس/طلا/پول هوشمند است: '+' | '.join(titles)+' خروجی فقط JSON آرایه بدون توضیح: [{"t":"موضوع فارسی کوتاه","f":"نکتهٔ آموزشی فارسی یک‌خطی","h":"قلاب فارسی جذاب"}] حداقل ۶ مورد.'
+          new=[]
+          if titles:
+              for attempt in range(2):
+                  try:
+                      if attempt==0:
+                          r=ur.urlopen(ur.Request('https://models.inference.ai.azure.com/chat/completions',data=json.dumps({'model':'gpt-4o-mini','messages':[{'role':'user','content':prompt}],'temperature':0.7}).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+PAT}),timeout=60).read().decode()
+                          txt=json.loads(r)['choices'][0]['message']['content']
+                      else:
+                          r=ur.urlopen(ur.Request('https://text.pollinations.ai/',data=json.dumps({'messages':[{'role':'user','content':prompt}],'model':'openai'}).encode(),headers={'Content-Type':'application/json'}),timeout=60).read().decode('utf-8','ignore')
+                          txt=r
+                      txt=txt.replace('```json','').replace('```','')
+                      i=txt.find('[');j=txt.rfind(']')
+                      new=json.loads(txt[i:j+1])
+                      break
+                  except Exception:pass
+          committed=False
+          if new and PAT:
+              try:
+                  vault={'principles':[],'quotes':[],'hooks':[],'lit_facts':[]}
+                  try:vault.update(json.loads(get('https://mbms-1356.github.io/forexin-site-/vault.json',15)))
+                  except Exception:pass
+                  for it in new:
+                      if it.get('t') and it['t'] not in vault['principles']:vault['principles'].append(it['t'])
+                      if it.get('f') and it['f'] not in vault['lit_facts']:vault['lit_facts'].append(it['f'])
+                      if it.get('h') and it['h'] not in vault['hooks']:vault['hooks'].append(it['h'])
+                  for k in vault:vault[k]=vault[k][-60:]
+                  body={'message':'vault tanker2','content':base64.b64encode(json.dumps(vault,ensure_ascii=False).encode()).decode()}
+                  try:
+                      old=json.loads(get('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/vault.json',15))
+                      body['sha']=old.get('sha')
+                  except Exception:pass
+                  ur.urlopen(ur.Request('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/vault.json',data=json.dumps(body).encode(),headers={'Authorization':'token '+PAT,'User-Agent':'studio','Accept':'application/vnd.github+json'},method='PUT'),timeout=30).read()
+                  committed=True
+              except Exception:pass
+          tell('🚛 تانکر۲ (اخبار/رقبا): عناوین: '+str(len(titles))+' | جدید به مخزن: '+str(len(new) if committed else 0))
+          print('done',len(titles),len(new),committed)
+          PYEND
