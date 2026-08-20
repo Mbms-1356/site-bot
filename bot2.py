@@ -1,5 +1,4 @@
 import os, json, threading, time as _t, re, urllib.request, urllib.parse, ssl, html
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 import telebot
 from telebot import types
@@ -175,7 +174,7 @@ WELCOME_GROUP = '''سلام {first} عزیز! 🌟
 
 ⚠️ مطالب آموزشی | 🚫 لینک/تبلیغ ممنوع.'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦', 'CAD': '🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -236,82 +235,21 @@ def get_gold_only():
         except Exception as e2:
             return f"🥇 <b>انس طلا:</b> خطا\n<code>{html.escape(str(e2)[:80])}</code>"
 
-def gold18_text(p):
+def get_usdt_only():
+    gold_line = ''
     try:
         g = fetch_json('https://api.gold-api.com/price/XAU')
         ounce = float(g['price'])
-        return f"\n🪙 طلای ۱۸ عیار: {int(p * ounce / 31.1035 * 0.75):,} تومان/گرم"
+        base = USDT_CACHE.get('price') or 189000
+        gold_line = f"\n🪙 طلای ۱۸ عیار (تخمینی): {int(base * ounce / 31.1035 * 0.75):,} تومان/گرم"
     except Exception:
-        return ''
-
-NOBITEX_API = 'https://api.nobitex.ir/market/stats?srcCurrency=usdt&dstCurrency=rls'
-
-def nobitex_parse(body):
-    d = json.loads(body)
-    v = int(d['stats']['usdt-rls']['latest']) // 10
-    if 100000 < v < 400000:
-        return v
-    raise Exception('range')
-
-def get_usdt_only():
-    errs = []
-    site_p = None
-    def nobitex_direct():
-        return nobitex_parse(fetch_text(NOBITEX_API, timeout=10))
-    def px(prefix, timeout=22):
-        return nobitex_parse(fetch_text(prefix + urllib.parse.quote(NOBITEX_API, safe=''), timeout=timeout))
-    def site_price():
-        d = json.loads(fetch_text(SITE + 'price.json?t=' + str(int(_t.time())), timeout=8))
-        p = int(d.get('usdt') or 0)
-        if 100000 < p < 400000:
-            return p
-        raise Exception('site')
-    def binance_p2p():
-        r = requests.post('https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search',
-            headers={'User-Agent': UA, 'Content-Type': 'application/json', 'clienttype': 'web'},
-            json={'asset': 'USDT', 'fiat': 'IRR', 'merchantCheck': False, 'page': 1, 'payTypes': [], 'publisherType': None, 'rows': 5, 'tradeType': 'SELL'},
-            timeout=8)
-        d = r.json()
-        for row in (d.get('data') or []):
-            try:
-                p = int(float(row['adv']['price']))
-                if p > 1000000:
-                    p //= 10
-                if 100000 < p < 400000:
-                    return p
-            except Exception:
-                continue
-        raise Exception('p2p')
-    jobs = {
-        'نوبیتکس‌زنده': nobitex_direct,
-        'نوبیتکس‌پ۱': lambda: px('https://api.allorigins.win/raw?url='),
-        'نوبیتکس‌پ۲': lambda: px('https://corsproxy.io/?url='),
-        'بایننسP2P': binance_p2p,
-        'سایت‌خودی': site_price,
-    }
-    with ThreadPoolExecutor(max_workers=6) as ex:
-        futs = {ex.submit(fn): name for name, fn in jobs.items()}
-        for f in as_completed(futs):
-            name = futs[f]
-            try:
-                p = f.result()
-            except Exception as e:
-                errs.append(f"{name}: {str(e)[:25]}")
-                continue
-            if name == 'سایت‌خودی':
-                site_p = p
-                continue
-            save_usdt_cache(p, name)
-            return f"🇮🇷 <b>قیمت لحظه‌ای بازار ایران:</b>\n💵 تتر: {p:,} تومان{gold18_text(p)}\n🏦 منبع: {name} ⚡\n<i>🤖 Forexin Bot</i>"
-    if site_p:
-        return f"🇮🇷 <b>قیمت بازار ایران:</b>\n💵 تتر: {site_p:,} تومان{gold18_text(site_p)}\n📌 قیمت پایه (مدیریت) — source زنده در دسترس نیست\n<i>🤖 Forexin Bot</i>"
-    if USDT_CACHE.get('price'):
-        age = int(_t.time()) - USDT_CACHE.get('ts', 0)
-        if age < 24 * 3600:
-            p = USDT_CACHE['price']
-            mins = max(1, age // 60)
-            return f"🇮🇷 <b>قیمت بازار ایران:</b>\n💵 تتر: {p:,} تومان{gold18_text(p)}\n🕐 بروزرسانی: {mins} دقیقه پیش | منبع: {USDT_CACHE.get('src', 'مدیریت')}\n<i>🤖 Forexin Bot</i>"
-    return '⚠️ <b>دریافت قیمت ممکن نشد.</b>\nمدیریت: /usdt قیمت را تنظیم کنید.\n<code>' + html.escape(' | '.join(errs)[:250]) + '</code>'
+        pass
+    return ('🇮🇷 <b>قیمت لحظه‌ای تتر در بازار ایران:</b>\n\n'
+        '🥇 <a href="https://nobitex.ir/price/usdt/">نوبیتکس (دقیق‌ترین)</a>\n'
+        '🥈 <a href="https://tabdeal.org/usdt-price">تبدیل</a>\n'
+        '🥉 <a href="https://www.ompfinex.com/markets/usdt-price">اُم‌فاینکس</a>\n'
+        + gold_line +
+        '\n\n💡 روی هر گزینه بزنید تا قیمت زنده باز شود.\n<i>🤖 Forexin Bot</i>')
 
 def news_today():
     try:
