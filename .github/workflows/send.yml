@@ -1,0 +1,23 @@
+name: send
+on:
+  repository_dispatch:
+    types: [send_pack]
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: send
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          p = json.loads(os.environ.get('PAYLOAD') or '{}')
+          text = p.get('text', '')
+          req = urllib.request.Request(
+              'https://api.telegram.org/bot' + os.environ['TOKEN'] + '/sendMessage',
+              data=json.dumps({'chat_id': 227491135, 'text': text}).encode('utf-8'),
+              headers={'Content-Type': 'application/json'})
+          print(urllib.request.urlopen(req, timeout=30).read().decode())
+          PY
