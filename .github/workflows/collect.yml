@@ -1,6 +1,6 @@
 name: collect
-on:
-  on:
+
+ on:
   workflow_dispatch:
   repository_dispatch:
     types: [collect]
