@@ -134,7 +134,7 @@ QUOTES = [
 ]
 
 GLOSS = {
-    'lat': 'لات: واحد حجم معامله؛ ۱ لات = ۱۰ واحد ارز پایه.',
+    'lat': 'لات: واحد حجم معامله؛ ۱ لات = ۱۰۰ واحد ارز پایه.',
     'pip': 'پیپ: کوچک‌ترین واحد تغییر قیمت.',
     'stop': 'استاپ: سفارش محدودکنندهٔ ضرر.',
     'ahrom': 'اهرم: سرمایهٔ قرضی از بروکر.',
@@ -174,7 +174,7 @@ WELCOME_GROUP = '''سلام {first} عزیز! 🌟
 
 ⚠️ مطالب آموزشی | 🚫 لینک/تبلیغ ممنوع.'''
 
-FLAGS = {'USD': '🇺', 'EUR': '🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨', 'CHF': '🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦', 'CAD': '🇦', 'CHF': '🇨🇭', 'NZD': '🇳'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -243,6 +243,15 @@ def gold18_text(p):
     except Exception:
         return ''
 
+NOBITEX_API = 'https://api.nobitex.ir/market/stats?srcCurrency=usdt&dstCurrency=rls'
+
+def nobitex_parse(body):
+    d = json.loads(body)
+    v = int(d['stats']['usdt-rls']['latest']) // 10
+    if 100000 < v < 400000:
+        return v
+    raise Exception('range')
+
 def get_usdt_only():
     results = []
     errs = []
@@ -253,6 +262,9 @@ def get_usdt_only():
                 results.append((name, p))
         except Exception as e:
             errs.append(f"{name}: {str(e)[:30]}")
+    add('نوبیتکس‌زنده', lambda: nobitex_parse(fetch_text(NOBITEX_API, timeout=8)))
+    add('نوبیتکس‌پ۱', lambda: nobitex_parse(fetch_text('https://api.allorigins.win/raw?url=' + urllib.parse.quote(NOBITEX_API, safe=''), timeout=10)))
+    add('نوبیتکس‌پ۲', lambda: nobitex_parse(fetch_text('https://corsproxy.io/?url=' + urllib.parse.quote(NOBITEX_API, safe=''), timeout=10)))
     def site_price():
         d = json.loads(fetch_text(SITE + 'price.json?t=' + str(int(_t.time())), timeout=8))
         p = int(d.get('usdt') or 0)
@@ -275,79 +287,12 @@ def get_usdt_only():
             except Exception:
                 continue
         raise Exception('p2p')
-    def bonbast():
-        r = requests.post('https://bonbast.com/json', headers={'User-Agent': UA, 'Referer': 'https://bonbast.com/'}, timeout=8)
-        d = json.loads(r.text)
-        if not isinstance(d, dict):
-            raise Exception('notdict')
-        for k in d:
-            kl = k.lower()
-            if 'usdt' in kl or kl == 'usd' or 'tether' in kl:
-                v = d[k]
-                if isinstance(v, dict):
-                    for kk in ('sell', 'buy', 'price', 'last'):
-                        if v.get(kk):
-                            p = clean(v[kk])
-                            if 100000 < p < 400000:
-                                return p
-                else:
-                    p = clean(v)
-                    if 100000 < p < 400000:
-                        return p
-        raise Exception('keys:' + ','.join(list(d.keys())[:6]))
-    def toman_regex(body):
-        for m in re.finditer(r'([0-9][0-9,]{5,8})\s*تومان', body):
-            v = clean(m.group(1))
-            if 100000 < v < 400000:
-                return v
-        raise Exception('parse')
-    def find_key(obj, keys):
-        if isinstance(obj, dict):
-            for k, v in obj.items():
-                if k in keys:
-                    try:
-                        iv = int(str(v).replace(',', ''))
-                        if iv > 0:
-                            return iv
-                    except Exception:
-                        pass
-                r = find_key(v, keys)
-                if r:
-                    return r
-        elif isinstance(obj, list):
-            for it in obj:
-                r = find_key(it, keys)
-                if r:
-                    return r
-        return None
-    def next_data(body):
-        m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', body, re.S)
-        return json.loads(m.group(1)) if m else None
-    def nobitex():
-        body = fetch_text('https://nobitex.ir/price/usdt/')
-        d = next_data(body)
-        if d:
-            v = find_key(d, {'latest', 'bestBuy', 'best_buy'})
-            if v:
-                if v > 1000000:
-                    v //= 10
-                return v
-        return toman_regex(body)
     add('سایت‌خودی', site_price)
     add('بایننسP2P', binance_p2p)
-    add('بن‌بست', bonbast)
-    add('نوبیتکس', nobitex)
-    try:
-        d = requests.post('https://api.tabdeal.org/api/v1/market/ticker?symbol=USDTIRT', headers={'User-Agent': UA}, timeout=6).json()
-        p = clean(d.get('data', {}).get('last') or d.get('last') or 0)
-        if 100000 < p < 400000:
-            results.append(('تبدیل', p))
-    except Exception as e:
-        errs.append(f"تبدیل: {str(e)[:30]}")
     if results:
         name, p = results[0]
         save_usdt_cache(p, name)
-        return f"🇮🇷 <b>قیمت لحظه‌ای بازار ایران:</b>\n💵 تتر: {p:,} تومان{gold18_text(p)}\n🏦 منبع: {name}\n<i>🤖 Forexin Bot</i>"
+        return f"🇮 <b>قیمت لحظه‌ای بازار ایران:</b>\n💵 تتر: {p:,} تومان{gold18_text(p)}\n🏦 منبع: {name}\n<i>🤖 Forexin Bot</i>"
     if USDT_CACHE.get('price'):
         age = int(_t.time()) - USDT_CACHE.get('ts', 0)
         if age < 24 * 3600:
