@@ -8,13 +8,11 @@ jobs:
     env:
       TOKEN: "8672154032:AAEgSGwR7uXGZsdpxNJvgsXswJ4aHoAYzhE"
       GH_PAT: ${{ secrets.GH_PAT }}
-      OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}:
-      TOKEN: "8672154032:AAEgSGwR7uXGZsdpxNJvgsXswJ4aHoAYzhE"
-      GH_PAT: ${{ secrets.GH_PAT }}
+      OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
     steps:
       - name: run studio
         run: |
           pip install pillow > /dev/null 2>&1
           sleep 5
-          curl -s https://mbms-1356.github.io/forexin-site-/studio.py -o studio.py
+          curl -s "https://mbms-1356.github.io/forexin-site-/studio.py?v=$(date +%s)" -o studio.py
           python3 studio.py
