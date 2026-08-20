@@ -6,9 +6,9 @@ jobs:
   send:
     runs-on: ubuntu-latest
     steps:
-      - name: send
+      - name: send via agent bot
         env:
-          TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TOKEN: "8672154032:AAEgSGwR7uXGZsdpxNJvgsXswJ4aHoAYzhE"
           PAYLOAD: ${{ toJSON(github.event.client_payload) }}
         run: |
           python3 - <<'PY'
