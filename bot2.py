@@ -1,4 +1,4 @@
-import os, json, threading, time as _t, re, urllib.request, urllib.parse, ssl, html
+import os, json, threading, time as _t, re, urllib.request, urllib.parse, ssl, html, base64
 from datetime import datetime, timedelta, timezone
 import telebot
 from telebot import types
@@ -38,6 +38,70 @@ BLOCK_FILE = 'blocklist.json'
 DL_DIR = 'dl'
 os.makedirs(DL_DIR, exist_ok=True)
 
+GH_TOKEN = os.environ.get('GH_TOKEN', '').strip()
+GH_REPO = os.environ.get('GH_REPO', '').strip()
+DATA_FILES = [DATA_FILE, ADMIN_FILE, GROUP_FILE, INVITE_FILE, CACHE_FILE, BLOCK_FILE]
+
+def fetch_json(url):
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    req = urllib.request.Request(url, headers={'User-Agent': UA})
+    return json.load(urllib.request.urlopen(req, timeout=6, context=ctx))
+
+def fetch_text(url, referer=None, timeout=10):
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    headers = {'User-Agent': UA}
+    if referer: headers['Referer'] = referer
+    req = urllib.request.Request(url, headers=headers)
+    return urllib.request.urlopen(req, timeout=timeout, context=ctx).read().decode('utf-8', 'ignore')
+
+_dirty = False
+def mark_dirty():
+    global _dirty
+    _dirty = True
+
+def gh_load():
+    if not GH_REPO:
+        return
+    for f in DATA_FILES:
+        if os.path.exists(f):
+            continue
+        try:
+            body = fetch_text('https://raw.githubusercontent.com/' + GH_REPO + '/main/' + f, timeout=8)
+            if body:
+                with open(f, 'w') as fh:
+                    fh.write(body)
+        except Exception:
+            pass
+
+def gh_save():
+    global _dirty
+    if not (GH_TOKEN and GH_REPO) or not _dirty:
+        return
+    for f in DATA_FILES:
+        try:
+            with open(f) as fh:
+                content = fh.read()
+        except Exception:
+            continue
+        try:
+            url = 'https://api.github.com/repos/' + GH_REPO + '/contents/' + f
+            h = {'Authorization': 'Bearer ' + GH_TOKEN, 'Accept': 'application/vnd.github+json', 'User-Agent': UA}
+            r = requests.get(url, headers=h, timeout=8)
+            sha = r.json().get('sha') if r.ok else None
+            payload = {'message': 'data sync', 'content': base64.b64encode(content.encode()).decode()}
+            if sha:
+                payload['sha'] = sha
+            requests.put(url, headers=h, json=payload, timeout=10)
+        except Exception:
+            pass
+    _dirty = False
+
+gh_load()
+
 ADMIN = None
 try:
     with open(ADMIN_FILE) as f: ADMIN = json.load(f)['id']
@@ -63,12 +127,16 @@ try:
     with open(BLOCK_FILE) as f: BLOCKLIST = set(json.load(f))
 except Exception: pass
 
+CAPTCHA = {}
+
 def save_invites():
+    mark_dirty()
     try:
         with open(INVITE_FILE, 'w') as f: json.dump(INVITES, f)
     except Exception: pass
 
 def save_usdt_cache(p, src):
+    mark_dirty()
     global USDT_CACHE
     USDT_CACHE = {'price': int(p), 'ts': int(_t.time()), 'src': src}
     try:
@@ -76,6 +144,7 @@ def save_usdt_cache(p, src):
     except Exception: pass
 
 def save_blocklist():
+    mark_dirty()
     try:
         with open(BLOCK_FILE, 'w') as f: json.dump(list(BLOCKLIST), f)
     except Exception: pass
@@ -88,6 +157,7 @@ def is_blocked(uid):
     return int(uid) in BLOCKLIST
 
 def save_group(gid):
+    mark_dirty()
     global GROUP_ID
     if GROUP_ID is None:
         GROUP_ID = gid
@@ -111,6 +181,7 @@ try:
 except Exception: TRADES = []
 
 def save_trades():
+    mark_dirty()
     try:
         with open(DATA_FILE, 'w') as f: json.dump(TRADES, f)
     except Exception: pass
@@ -119,6 +190,7 @@ def ensure_admin(uid):
     global ADMIN
     if ADMIN is None:
         ADMIN = uid
+        mark_dirty()
         try:
             with open(ADMIN_FILE, 'w') as f: json.dump({'id': uid}, f)
         except Exception: pass
@@ -174,7 +246,7 @@ WELCOME_GROUP = '''سلام {first} عزیز! 🌟
 
 ⚠️ مطالب آموزشی | 🚫 لینک/تبلیغ ممنوع.'''
 
-FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦', 'CAD': '🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
+FLAGS = {'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧', 'JPY': '🇯🇵', 'CNY': '🇨🇳', 'AUD': '🇦🇺', 'CAD': '🇨🇦', 'CHF': '🇨🇭', 'NZD': '🇳🇿'}
 
 def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -197,22 +269,6 @@ def group_menu():
     m.add(types.InlineKeyboardButton('🎁 لینک‌ها', callback_data='inv'), types.InlineKeyboardButton('🎟️ لینک دعوت', callback_data='invite'))
     m.add(types.InlineKeyboardButton('🚀 شروع', callback_data='st'))
     return m
-
-def fetch_json(url):
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    req = urllib.request.Request(url, headers={'User-Agent': UA})
-    return json.load(urllib.request.urlopen(req, timeout=6, context=ctx))
-
-def fetch_text(url, referer=None, timeout=10):
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    headers = {'User-Agent': UA}
-    if referer: headers['Referer'] = referer
-    req = urllib.request.Request(url, headers=headers)
-    return urllib.request.urlopen(req, timeout=timeout, context=ctx).read().decode('utf-8', 'ignore')
 
 def tehran_now():
     return datetime.now(timezone(timedelta(hours=3, minutes=30)))
@@ -244,7 +300,7 @@ def get_usdt_only():
         gold_line = f"\n🪙 طلای ۱۸ عیار (تخمینی): {int(base * ounce / 31.1035 * 0.75):,} تومان/گرم"
     except Exception:
         pass
-    return ('🇮🇷 <b>قیمت لحظه‌ای تتر در بازار ایران:</b>\n\n'
+    return ('🇮 <b>قیمت لحظه‌ای تتر در بازار ایران:</b>\n\n'
         '🥇 <a href="https://nobitex.ir/price/usdt/">نوبیتکس (دقیق‌ترین)</a>\n'
         '🥈 <a href="https://tabdeal.org/usdt-price">تبدیل</a>\n'
         '🥉 <a href="https://www.ompfinex.com/markets/usdt-price">اُم‌فاینکس</a>\n'
@@ -479,6 +535,30 @@ def post_all(text):
         try: bot.send_message(GROUP_ID, text)
         except Exception: pass
 
+def sync_loop():
+    while True:
+        _t.sleep(120)
+        try: gh_save()
+        except Exception: pass
+
+def cap_watch():
+    while True:
+        _t.sleep(10)
+        try:
+            now = _t.time()
+            for uid in list(CAPTCHA):
+                rec = CAPTCHA[uid]
+                if now > rec['exp']:
+                    CAPTCHA.pop(uid, None)
+                    try: bot.delete_message(rec['chat'], rec['msg'])
+                    except Exception: pass
+                    try: bot.ban_chat_member(rec['chat'], uid)
+                    except Exception: pass
+        except Exception: pass
+
+threading.Thread(target=sync_loop, daemon=True).start()
+threading.Thread(target=cap_watch, daemon=True).start()
+
 @bot.message_handler(content_types=['new_chat_members'])
 def new_member(m):
     if m.chat.type in ('group', 'supergroup'):
@@ -491,9 +571,14 @@ def new_member(m):
                     bot.send_message(m.chat.id, f'⛔ <b>{u.first_name}</b> قبلاً بن شده بود؛ دوباره حذف شد.')
                 except Exception: pass
                 continue
-            try:
-                bot.send_message(m.chat.id, WELCOME_GROUP.format(first=u.first_name or 'دوست'), reply_markup=group_menu())
-            except Exception: pass
+            if m.chat.type in ('group', 'supergroup'):
+                try:
+                    bot.restrict_chat_member(m.chat.id, u.id, can_send_messages=False, can_send_audios=False, can_send_documents=False, can_send_photos=False, can_send_videos=False, can_send_other_messages=False)
+                except Exception: pass
+                mk = types.InlineKeyboardMarkup()
+                mk.add(types.InlineKeyboardButton('✅ من ربات نیستم', callback_data=f'cap:{u.id}'))
+                msg = bot.send_message(m.chat.id, f'🛡️ <b>{u.first_name or "کاربر"}</b> عزیز، خوش آمدید!\nبرای تأیید، تا ۲ دقیقه دکمهٔ زیر را بزنید:', reply_markup=mk)
+                CAPTCHA[u.id] = {'chat': m.chat.id, 'exp': _t.time() + 120, 'msg': msg.message_id, 'name': u.first_name or 'دوست'}
 
 @bot.message_handler(commands=['start'])
 def start(m):
@@ -519,6 +604,20 @@ def cb(c):
     uid = c.from_user.id
     d = c.data
     try:
+        if d.startswith('cap:'):
+            target = int(d[4:])
+            if uid == target and target in CAPTCHA:
+                rec = CAPTCHA.pop(target, None)
+                try: bot.delete_message(rec['chat'], rec['msg'])
+                except Exception: pass
+                try:
+                    bot.restrict_chat_member(rec['chat'], target, can_send_messages=True, can_send_audios=True, can_send_documents=True, can_send_photos=True, can_send_videos=True, can_send_other_messages=True)
+                except Exception: pass
+                bot.send_message(rec['chat'], WELCOME_GROUP.format(first=rec.get('name', 'دوست')), reply_markup=group_menu())
+                bot.answer_callback_query(c.id, '✅ تأیید شد؛ خوش آمدید!')
+                return
+            bot.answer_callback_query(c.id)
+            return
         if d == 'st':
             if c.message.chat.type in ('group', 'supergroup'):
                 bot.send_message(chat, WELCOME_PRIV, reply_markup=group_menu())
@@ -628,6 +727,34 @@ def txt(m):
                 block_user(uid)
                 bot.send_message(m.chat.id, '⛔ کاربر بن شد و در بلاک‌لیست دائمی قرار گرفت.')
             except Exception: pass
+        return
+
+    if t.startswith('/rr'):
+        parts = t.split()
+        if len(parts) == 4:
+            try:
+                e, s, tg = float(parts[1]), float(parts[2]), float(parts[3])
+                risk, reward = abs(e - s), abs(tg - e)
+                rr = reward / risk if risk else 0
+                bot.reply_to(m, f"🧮 <b>ماشین‌حساب R:R</b>\n🎯 ورود: {e}\n🛡️ استاپ: {s} (ریسک: {risk:g})\n🏆 تارگت: {tg} (پاداش: {reward:g})\n💎 R:R = 1:{rr:.2f}\n" + ('✅ عالی (۲ به بالا)' if rr >= 2 else '⚠️ زیر ۲ — محتاط باشید'))
+            except Exception:
+                bot.reply_to(m, 'فرمت: /rr ورود استاپ تارگت')
+        else:
+            bot.reply_to(m, 'فرمت: /rr ورود استاپ تارگت')
+        return
+
+    if t.startswith('/lot'):
+        parts = t.split()
+        if len(parts) == 4:
+            try:
+                bal, risk, pips = float(parts[1]), float(parts[2]), float(parts[3])
+                risk_amt = bal * risk / 100
+                lots = risk_amt / (pips * 10) if pips else 0
+                bot.reply_to(m, f"🧮 <b>ماشین‌حساب حجم</b>\n💵 بالانس: ${bal:g}\n⚠️ ریسک: {risk:g}% = ${risk_amt:.2f}\n🛡️ استاپ: {pips:g} پیپ\n💎 حجم پیشنهادی: {lots:.2f} لات استاندارد")
+            except Exception:
+                bot.reply_to(m, 'فرمت: /lot بالانس ریسک% پیپ')
+        else:
+            bot.reply_to(m, 'فرمت: /lot بالانس ریسک% پیپ')
         return
 
     if t.startswith('/usdt') and ensure_admin(uid):
