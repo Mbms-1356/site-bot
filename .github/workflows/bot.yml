@@ -97,7 +97,7 @@ jobs:
               for k in vault:vault[k]=vault[k][-80:]
               commit_txt('vault.json',json.dumps(vault,ensure_ascii=False))
               return len(obj.get('topics',[]))
-          MENU={'keyboard':[['📝 پست جدید','🎲 پست از مخزن'],['📚 افزودن PDF','🖼 آپلود عکس'],['💰 قیمت روز','❓ راهنما']],'resize_keyboard':True}
+          MENU={'keyboard':[['📦 بسته کامل','🎲 پست از مخزن'],['🖼 ساخت عکس','✍️ نوشتن کپشن'],['🎬 ساخت ریلز','📚 افزودن PDF'],['🖼 آپلود عکس','💰 قیمت روز'],['❓ راهنما']],'resize_keyboard':True}
           try:req('/deleteWebhook',b'{}')
           except Exception:pass
           off=0
@@ -117,7 +117,7 @@ jobs:
             t=msg.get('text','')
             try:
               if t=='/start' or t=='❓ راهنما':
-                  send('🦁 دستیار فارکسین آماده است:\n📝 پست جدید = موضوع بنویس\n🎲 پست از مخزن\n📚 PDF بفرست تا به کتابخانه برود\n🖼 عکس بفرست برای کاور\n💰 قیمت روز',MENU)
+                  send('🦁 دستیار فارکسین:\n📦 بسته کامل = عکس+کپشن+ریلز+کارت\n🎲 پست از مخزن\n🖼 فقط عکس | ✍️ فقط کپشن | 🎬 فقط ریلز\n📚 PDF بفرست = کتابخانه\n🖼 عکس بفرست = کاور\n💰 قیمت روز',MENU)
               elif t=='/price' or t=='💰 قیمت روز':
                   usdt=0;oz=0
                   try:usdt=int(json.loads(get(SITE+'/price.json')).get('usdt',0))
@@ -126,9 +126,15 @@ jobs:
                   except Exception:pass
                   send('💹 تتر: '+str(usdt)+' تومان\n🪙 انس: '+str(oz)+' دلار')
               elif t=='/auto' or t=='🎲 پست از مخزن':
-                  send('🎲 در حال ساخت پست از مخزن…');run_studio({})
-              elif t=='📝 پست جدید':
-                  send('موضوع را بنویس (یا /post موضوع):')
+                  send('🎲 در حال ساخت از مخزن…');run_studio({'mode':'full'})
+              elif t=='📦 بسته کامل' or t=='📝 پست جدید':
+                  st=state_load();st['mode']='full';state_save(st);send('موضوع را بنویس:')
+              elif t=='🖼 ساخت عکس':
+                  st=state_load();st['mode']='img';state_save(st);send('موضوع را بنویس تا فقط عکس بسازم:')
+              elif t=='✍️ نوشتن کپشن':
+                  st=state_load();st['mode']='cap';state_save(st);send('موضوع را بنویس تا فقط کپشن بنویسم:')
+              elif t=='🎬 ساخت ریلز':
+                  st=state_load();st['mode']='vid';state_save(st);send('موضوع را بنویس تا فقط ریلز بسازم:')
               elif t=='📚 افزودن PDF':
                   send('PDF را همین‌جا بفرست:')
               elif t=='🖼 آپلود عکس':
@@ -138,26 +144,26 @@ jobs:
                   if (doc.get('mime_type') or '')=='application/pdf':
                       send('📚 PDF دریافت شد؛ در حال خواندن…')
                       n=ingest_pdf(tgfile(doc['file_id']),doc.get('file_name',''))
-                      send('✅ به کتابخانه اضافه شد؛ +'+str(n)+' موضوع. حالا /post یا 🎲 بزن.')
+                      send('✅ به کتابخانه اضافه شد؛ +'+str(n)+' موضوع.')
                   else:send('فقط PDF بفرست.')
               elif msg.get('photo'):
                   ph=msg['photo'][-1]
                   commit('media/custom.jpg',base64.b64encode(tgfile(ph['file_id'])).decode(),'bot photo')
                   st=state_load();st['photo']=SITE+'/media/custom.jpg';state_save(st)
-                  send('🖼 عکس ذخیره شد؛ با 📝 یا /post، پست بعدی با همین عکس ساخته می‌شود (۱ دقیقه بعد).')
+                  send('🖼 عکس ذخیره شد؛ پست بعدی با همین عکس (۱ دقیقه بعد).')
               elif msg.get('video'):
-                  send('🎬 ویدیو دریافت شد؛ برای ارسال به کانال، لینک آن را دستی بگذار (حجم تلگرام‌بات محدود است).')
+                  send('🎬 ویدیو دریافت شد؛ به‌دلیل محدودیت حجم، لینکش را دستی بگذار.')
               elif t.startswith('/img'):
-                  send('✅ در حال ساخت با تصویر دلخواه…');run_studio({'img':t[4:].strip()})
+                  send('✅ در حال ساخت با تصویر دلخواه…');run_studio({'img':t[4:].strip(),'mode':'full'})
               elif t.startswith('/post'):
-                  st=state_load();img=st.get('photo','')
-                  if img:st.pop('photo',None);state_save(st)
-                  send('✅ در حال ساخت «'+t[5:].strip()+'»…');run_studio({'topic':t[5:].strip(),'img':img})
+                  st=state_load();img=st.get('photo','');st.pop('photo',None);state_save(st)
+                  send('✅ در حال ساخت «'+t[5:].strip()+'»…');run_studio({'topic':t[5:].strip(),'img':img,'mode':'full'})
               elif t.startswith('/'):continue
               else:
-                  st=state_load();img=st.get('photo','')
-                  if img:st.pop('photo',None);state_save(st)
-                  send('✅ در حال ساخت «'+t.strip()+'»…');run_studio({'topic':t.strip(),'img':img})
+                  st=state_load();img=st.get('photo','');mode=st.pop('mode','full')
+                  if img:st.pop('photo',None)
+                  state_save(st)
+                  send('✅ در حال ساخت…');run_studio({'topic':t.strip(),'img':img,'mode':mode})
             except Exception as e:
               send('⚠️ خطا: '+str(e)[:100])
           print('bot done',len(msgs))
