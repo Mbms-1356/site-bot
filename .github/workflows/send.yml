@@ -2,6 +2,8 @@ name: send
 on:
   repository_dispatch:
     types: [send_pack]
+  schedule:
+    - cron: '30 7 * * *'
 jobs:
   send:
     runs-on: ubuntu-latest
@@ -11,9 +13,13 @@ jobs:
       OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
       CUSTOM: ${{ toJSON(github.event.client_payload) }}
     steps:
+      - name: deps
+        run: |
+          sudo apt-get update -y > /dev/null 2>&1
+          sudo apt-get install -y ffmpeg > /dev/null 2>&1
+          pip install pillow > /dev/null 2>&1
       - name: run studio
         run: |
-          pip install pillow > /dev/null 2>&1
           sleep 5
           curl -s "https://mbms-1356.github.io/forexin-site-/studio.py?v=$(date +%s)" -o studio.py
           python3 studio.py
