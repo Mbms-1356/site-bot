@@ -11,6 +11,7 @@ jobs:
       GH_PAT: ${{ secrets.GH_PAT }}
       OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
       GROQ_KEY: ${{ secrets.GROQ_KEY }}
+      EVENT: ${{ github.event_name }}
     steps:
       - name: deps
         run: |
@@ -21,16 +22,15 @@ jobs:
         run: |
           curl -s "https://mbms-1356.github.io/forexin-site-/studio.py?v=$(date +%s)" -o studio.py
           python3 - <<'PYEND'
-          import json,os,urllib.request as ur,subprocess,base64
-          TOK=os.environ['TOKEN'];PAT=os.environ.get('GH_PAT','')
+          import json,os,time,urllib.request as ur,subprocess,base64
+          TOK=os.environ['TOKEN'];PAT=os.environ.get('GH_PAT','');EVT=os.environ.get('EVENT','')
           API='https://api.telegram.org/bot'+TOK
-          # حذف Webhook رباینده (یک‌بار)
-          try:ur.urlopen(ur.Request(API+'/deleteWebhook',data=b'{}',headers={'Content-Type':'application/json'}),timeout=20)
-          except Exception:pass
-          def get(u,t=30):return ur.urlopen(ur.Request(u,headers={'User-Agent':'Mozilla/5.0'}),timeout=t).read().decode('utf-8','ignore')
+          def req(u,d=None,t=30):
+              return ur.urlopen(ur.Request(API+u,data=d,headers={'Content-Type':'application/json'}),timeout=t).read().decode('utf-8','ignore')
           def send(t):
-              try:ur.urlopen(ur.Request(API+'/sendMessage',data=json.dumps({'chat_id':'227491135','text':t}).encode(),headers={'Content-Type':'application/json'}),timeout=20)
+              try:req('/sendMessage',json.dumps({'chat_id':'227491135','text':t}).encode())
               except Exception:pass
+          def get(u,t=30):return ur.urlopen(ur.Request(u,headers={'User-Agent':'Mozilla/5.0'}),timeout=t).read().decode('utf-8','ignore')
           def commit(path,content):
               try:
                   body={'message':'bot '+path,'content':base64.b64encode(content.encode()).decode()}
@@ -40,16 +40,23 @@ jobs:
                   except Exception:pass
                   ur.urlopen(ur.Request('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/'+path,data=json.dumps(body).encode(),headers={'Authorization':'token '+PAT,'User-Agent':'bot','Accept':'application/vnd.github+json'},method='PUT'),timeout=30).read()
               except Exception:pass
+          try:req('/deleteWebhook',b'{}')
+          except Exception:pass
           off=0
           try:off=int(json.loads(get('https://mbms-1356.github.io/forexin-site-/bot_offset.json')).get('off',0))
           except Exception:pass
-          try:up=json.loads(get(API+'/getUpdates?offset='+str(off+1),20))
-          except Exception:up={'result':[]}
-          msgs=up.get('result',[])
+          up={'result':[]}
+          try:up=json.loads(req('/getUpdates?offset='+str(off+1)+'&timeout=5'))
+          except Exception as e:
+              send('🛠 خطای اتصال ربات (توکن را چک کن): '+str(e)[:100])
+          now=int(time.time())
+          allm=up.get('result',[])
+          msgs=[m for m in allm if (m.get('message') or {}).get('date',0)>now-1800]
           newoff=off
-          for m in msgs:newoff=max(newoff,m['update_id'])
-          if off==0 and msgs:
-              commit('bot_offset.json',json.dumps({'off':newoff}));msgs=[]
+          for m in allm:newoff=max(newoff,m['update_id'])
+          if newoff>off:commit('bot_offset.json',json.dumps({'off':newoff}))
+          if not msgs and EVT=='workflow_dispatch':
+              send('🤖 ربات آنلاین است؛ فرمان جدیدی نیست. حالا /post موضوع را بفرست.')
           for m in msgs:
               t=(m.get('message') or {}).get('text','')
               if not t:continue
@@ -57,10 +64,10 @@ jobs:
               if t.startswith('/img'):img=t[4:].strip()
               elif t.startswith('/post'):topic=t[5:].strip()
               elif t.startswith('/auto'):topic=''
+              elif t.startswith('/'):continue
               else:topic=t.strip()
               send('✅ دستور دریافت شد؛ در حال ساخت بستهٔ «'+(topic or 'تصادفی')+'»…')
               env=dict(os.environ);env['CUSTOM']=json.dumps({'topic':topic,'text':text,'img':img})
               subprocess.run(['python3','studio.py'],env=env,timeout=300)
-          if msgs:commit('bot_offset.json',json.dumps({'off':newoff}))
           print('bot done',len(msgs))
           PYEND
