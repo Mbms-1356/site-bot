@@ -1,0 +1,93 @@
+name: library
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 9 * * *'
+jobs:
+  library:
+    runs-on: ubuntu-latest
+    env:
+      GH_PAT: ${{ secrets.GH_PAT }}
+      OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
+      GROQ_KEY: ${{ secrets.GROQ_KEY }}
+      TOKEN: "8672154032:AAEgSGwR7uXGZsdpxNJvgsXswJ4aHoAYzhE"
+    steps:
+      - name: process pdfs
+        run: |
+          pip install pypdf >/dev/null 2>&1
+          python3 - <<'PYEND'
+          import json,os,io,urllib.request as ur,traceback,base64
+          PAT=os.environ.get('GH_PAT','');OR=os.environ.get('OPENROUTER_KEY','');GK=os.environ.get('GROQ_KEY','')
+          API='https://api.telegram.org/bot'+os.environ['TOKEN']
+          def tell(t):
+              try:ur.urlopen(ur.Request(API+'/sendMessage',data=json.dumps({'chat_id':'227491135','text':t}).encode(),headers={'Content-Type':'application/json'}),timeout=20)
+              except Exception:pass
+          def get(u,t=40):return ur.urlopen(ur.Request(u,headers={'User-Agent':'Mozilla/5.0'}),timeout=t).read()
+          models=[]
+          if OR:
+              try:
+                  ml=json.loads(get('https://openrouter.ai/api/v1/models',20))
+                  free=[m.get('id','') for m in ml.get('data',[]) if m.get('pricing',{}).get('prompt')=='0' and m.get('pricing',{}).get('completion')=='0']
+                  pref=[m for m in free if any(k in m.lower() for k in ['qwen','llama','mistral','deepseek','gemini','alpha'])]
+                  models=(pref or free)[:2]
+              except Exception:pass
+          def ask(s,u):
+              for m in models:
+                  try:
+                      r=ur.urlopen(ur.Request('https://openrouter.ai/api/v1/chat/completions',data=json.dumps({'model':m,'messages':[{'role':'user','content':s+'\n'+u}],'max_tokens':1600}).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+OR}),timeout=60).read().decode()
+                      c=json.loads(r)['choices'][0]['message']['content']
+                      if c:return c
+                  except Exception:pass
+              if GK:
+                  try:
+                      r=ur.urlopen(ur.Request('https://api.groq.com/openai/v1/chat/completions',data=json.dumps({'model':'llama-3.3-70b-versatile','messages':[{'role':'user','content':s+'\n'+u}],'max_tokens':1600}).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+GK}),timeout=60).read().decode()
+                      return json.loads(r)['choices'][0]['message']['content']
+                  except Exception:pass
+              return ''
+          def commit(path,content):
+              body={'message':'library '+path,'content':base64.b64encode(content.encode()).decode()}
+              try:
+                  old=json.loads(get('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/'+path))
+                  body['sha']=old.get('sha')
+              except Exception:pass
+              ur.urlopen(ur.Request('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/'+path,data=json.dumps(body).encode(),headers={'Authorization':'token '+PAT,'User-Agent':'lib','Accept':'application/vnd.github+json'},method='PUT'),timeout=30).read()
+          lst=json.loads(get('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/'))
+          pdfs=[f for f in lst if f['name'].lower().endswith('.pdf')]
+          processed=[]
+          try:processed=json.loads(get('https://mbms-1356.github.io/forexin-site-/processed.json'))
+          except Exception:pass
+          done=0
+          for f in pdfs:
+              if f['name'] in processed or done>=1:continue
+              try:
+                  from pypdf import PdfReader
+                  data=ur.urlopen(f['download_url'],timeout=60).read()
+                  rd=PdfReader(io.BytesIO(data))
+                  text=''
+                  for pg in rd.pages[:12]:text+=(pg.extract_text() or '')
+                  text=text[:9000]
+                  if len(text)<200:continue
+                  out=ask('از متن PDF فارکس، فقط JSON برگردان: {"topics":[۶ موضوع فارسی کوتاه],"quotes":[۴ جملهٔ طلایی/حرف بزرگان],"facts":[۶ نکته آموزشی],"hooks":[ قلاب جذاب]}','متن:\n'+text)
+                  out=out.replace('```json','').replace('```','')
+                  i=out.find('{');j=out.rfind('}')
+                  obj=json.loads(out[i:j+1])
+                  vault={'principles':[],'quotes':[],'hooks':[],'lit_facts':[]}
+                  try:vault.update(json.loads(get('https://mbms-1356.github.io/forexin-site-/vault.json')))
+                  except Exception:pass
+                  for t in obj.get('topics',[]):
+                      if t not in vault['principles']:vault['principles'].append(t)
+                  for q in obj.get('quotes',[]):
+                      if q not in vault['quotes']:vault['quotes'].append(q)
+                  for h in obj.get('hooks',[]):
+                      if h not in vault['hooks']:vault['hooks'].append(h)
+                  for fc in obj.get('facts',[]):
+                      if fc not in vault['lit_facts']:vault['lit_facts'].append(fc)
+                  for k in vault:vault[k]=vault[k][-80:]
+                  commit('vault.json',json.dumps(vault,ensure_ascii=False))
+                  processed.append(f['name']);commit('processed.json',json.dumps(processed))
+                  done+=1
+                  tell('📚 کتابخانه: «'+f['name']+'» خوانده شد؛ +'+str(len(obj.get('topics',[])))+' موضوع و '+str(len(obj.get('quotes',[])))+' نقل‌قول')
+              except Exception as e:
+                  tell('📚 خطا در '+f['name']+': '+str(e)[:80])
+          print('library done',done)
+          PYEND
