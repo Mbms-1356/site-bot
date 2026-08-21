@@ -1,5 +1,19 @@
 name: send
 on:
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: 'موضوع دلخواه (اختیاری)'
+        required: false
+        type: string
+      text:
+        description: 'متن/کپشن دلخواه (اختیاری)'
+        required: false
+        type: string
+      img:
+        description: 'لینک عکس یا پرامپت تصویر (اختیاری)'
+        required: false
+        type: string
   repository_dispatch:
     types: [send_pack]
   schedule:
@@ -12,7 +26,7 @@ jobs:
       GH_PAT: ${{ secrets.GH_PAT }}
       OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
       GROQ_KEY: ${{ secrets.GROQ_KEY }}
-      CUSTOM: ${{ toJSON(github.event.client_payload) }}
+      CUSTOM: ${{ toJSON(github.event.inputs) }}
     steps:
       - name: deps
         run: |
