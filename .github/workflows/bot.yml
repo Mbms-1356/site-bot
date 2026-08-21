@@ -17,57 +17,148 @@ jobs:
         run: |
           sudo apt-get update -y >/dev/null 2>&1
           sudo apt-get install -y ffmpeg >/dev/null 2>&1
-          pip install pillow >/dev/null 2>&1
-      - name: poll and run
+          pip install pillow pypdf >/dev/null 2>&1
+      - name: assistant
         run: |
           curl -s "https://mbms-1356.github.io/forexin-site-/studio.py?v=$(date +%s)" -o studio.py
           python3 - <<'PYEND'
-          import json,os,time,urllib.request as ur,subprocess,base64
-          TOK=os.environ['TOKEN'];PAT=os.environ.get('GH_PAT','');EVT=os.environ.get('EVENT','')
+          import json,os,io,time,urllib.request as ur,subprocess,base64
+          TOK=os.environ['TOKEN'];PAT=os.environ.get('GH_PAT','');OR=os.environ.get('OPENROUTER_KEY','');GK=os.environ.get('GROQ_KEY','');EVT=os.environ.get('EVENT','')
           API='https://api.telegram.org/bot'+TOK
-          def req(u,d=None,t=30):
+          SITE='https://mbms-1356.github.io/forexin-site-'
+          def req(u,d=None,t=40):
               return ur.urlopen(ur.Request(API+u,data=d,headers={'Content-Type':'application/json'}),timeout=t).read().decode('utf-8','ignore')
-          def send(t):
-              try:req('/sendMessage',json.dumps({'chat_id':'227491135','text':t}).encode())
+          def get(u,t=40):return ur.urlopen(ur.Request(u,headers={'User-Agent':'Mozilla/5.0'}),timeout=t).read()
+          def send(t,kb=None):
+              d={'chat_id':'227491135','text':t}
+              if kb:d['reply_markup']=kb
+              try:req('/sendMessage',json.dumps(d).encode())
               except Exception:pass
-          def get(u,t=30):return ur.urlopen(ur.Request(u,headers={'User-Agent':'Mozilla/5.0'}),timeout=t).read().decode('utf-8','ignore')
-          def commit(path,content):
+          def commit(path,b64,msg):
+              body={'message':msg,'content':b64}
               try:
-                  body={'message':'bot '+path,'content':base64.b64encode(content.encode()).decode()}
-                  try:
-                      old=json.loads(get('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/'+path))
-                      body['sha']=old.get('sha')
-                  except Exception:pass
-                  ur.urlopen(ur.Request('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/'+path,data=json.dumps(body).encode(),headers={'Authorization':'token '+PAT,'User-Agent':'bot','Accept':'application/vnd.github+json'},method='PUT'),timeout=30).read()
+                  old=json.loads(get('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/'+path))
+                  body['sha']=old.get('sha')
               except Exception:pass
+              try:ur.urlopen(ur.Request('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/'+path,data=json.dumps(body).encode(),headers={'Authorization':'token '+PAT,'User-Agent':'bot','Accept':'application/vnd.github+json'},method='PUT'),timeout=30).read()
+              except Exception:pass
+          def commit_txt(path,s):commit(path,base64.b64encode(s.encode()).decode(),'bot '+path)
+          def state_load():
+              try:return json.loads(get(SITE+'/bot_state.json'))
+              except Exception:return {}
+          def state_save(d):commit_txt('bot_state.json',json.dumps(d))
+          models=[]
+          if OR:
+              try:
+                  ml=json.loads(get('https://openrouter.ai/api/v1/models',20))
+                  free=[m.get('id','') for m in ml.get('data',[]) if m.get('pricing',{}).get('prompt')=='0' and m.get('pricing',{}).get('completion')=='0']
+                  pref=[m for m in free if any(k in m.lower() for k in ['qwen','llama','mistral','deepseek','gemini','alpha'])]
+                  models=(pref or free)[:2]
+              except Exception:pass
+          def ask(s,u):
+              for m in models:
+                  try:
+                      r=ur.urlopen(ur.Request('https://openrouter.ai/api/v1/chat/completions',data=json.dumps({'model':m,'messages':[{'role':'user','content':s+'\n'+u}],'max_tokens':1600}).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+OR}),timeout=60).read().decode()
+                      c=json.loads(r)['choices'][0]['message']['content']
+                      if c:return c
+                  except Exception:pass
+              if GK:
+                  try:
+                      r=ur.urlopen(ur.Request('https://api.groq.com/openai/v1/chat/completions',data=json.dumps({'model':'llama-3.3-70b-versatile','messages':[{'role':'user','content':s+'\n'+u}],'max_tokens':1600}).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+GK}),timeout=60).read().decode()
+                      return json.loads(r)['choices'][0]['message']['content']
+                  except Exception:pass
+              return ''
+          def tgfile(fid):
+              r=json.loads(req('/getFile?file_id='+fid))
+              return ur.urlopen('https://api.telegram.org/file/bot'+TOK+'/'+r['result']['file_path'],timeout=90).read()
+          def run_studio(c):
+              env=dict(os.environ);env['CUSTOM']=json.dumps(c)
+              subprocess.run(['python3','studio.py'],env=env,timeout=300)
+          def ingest_pdf(data,name):
+              from pypdf import PdfReader
+              rd=PdfReader(io.BytesIO(data));text=''
+              for pg in rd.pages[:10]:text+=(pg.extract_text() or '')
+              text=text[:9000]
+              if len(text)<200:return 0
+              out=ask('از متن فارکس فقط JSON: {"topics":[۶ موضوع فارسی کوتاه],"quotes":[۴ جمله طلایی/بزرگان],"facts":[۶ نکته],"hooks":[۴ قلاب]}',text)
+              out=out.replace('```json','').replace('```','');i=out.find('{');j=out.rfind('}')
+              obj=json.loads(out[i:j+1])
+              vault={'principles':[],'quotes':[],'hooks':[],'lit_facts':[]}
+              try:vault.update(json.loads(get(SITE+'/vault.json')))
+              except Exception:pass
+              for t in obj.get('topics',[]):
+                  if t not in vault['principles']:vault['principles'].append(t)
+              for q in obj.get('quotes',[]):
+                  if q not in vault['quotes']:vault['quotes'].append(q)
+              for h in obj.get('hooks',[]):
+                  if h not in vault['hooks']:vault['hooks'].append(h)
+              for f in obj.get('facts',[]):
+                  if f not in vault['lit_facts']:vault['lit_facts'].append(f)
+              for k in vault:vault[k]=vault[k][-80:]
+              commit_txt('vault.json',json.dumps(vault,ensure_ascii=False))
+              return len(obj.get('topics',[]))
+          MENU={'keyboard':[['📝 پست جدید','🎲 پست از مخزن'],['📚 افزودن PDF','🖼 آپلود عکس'],['💰 قیمت روز','❓ راهنما']],'resize_keyboard':True}
           try:req('/deleteWebhook',b'{}')
           except Exception:pass
           off=0
-          try:off=int(json.loads(get('https://mbms-1356.github.io/forexin-site-/bot_offset.json')).get('off',0))
+          try:off=int(json.loads(get(SITE+'/bot_offset.json')).get('off',0))
           except Exception:pass
           up={'result':[]}
           try:up=json.loads(req('/getUpdates?offset='+str(off+1)+'&timeout=5'))
-          except Exception as e:
-              send('🛠 خطای اتصال ربات (توکن را چک کن): '+str(e)[:100])
-          now=int(time.time())
-          allm=up.get('result',[])
+          except Exception as e:send('🛠 خطای ربات: '+str(e)[:80])
+          now=int(time.time());allm=up.get('result',[])
           msgs=[m for m in allm if (m.get('message') or {}).get('date',0)>now-1800]
           newoff=off
           for m in allm:newoff=max(newoff,m['update_id'])
-          if newoff>off:commit('bot_offset.json',json.dumps({'off':newoff}))
-          if not msgs and EVT=='workflow_dispatch':
-              send('🤖 ربات آنلاین است؛ فرمان جدیدی نیست. حالا /post موضوع را بفرست.')
+          if newoff>off:commit_txt('bot_offset.json',json.dumps({'off':newoff}))
+          if not msgs and EVT=='workflow_dispatch':send('🤖 آنلاینم؛ فرمانی نیست.',MENU)
           for m in msgs:
-              t=(m.get('message') or {}).get('text','')
-              if not t:continue
-              topic='';text='';img=''
-              if t.startswith('/img'):img=t[4:].strip()
-              elif t.startswith('/post'):topic=t[5:].strip()
-              elif t.startswith('/auto'):topic=''
+            msg=m.get('message') or {}
+            t=msg.get('text','')
+            try:
+              if t=='/start' or t=='❓ راهنما':
+                  send('🦁 دستیار فارکسین آماده است:\n📝 پست جدید = موضوع بنویس\n🎲 پست از مخزن\n📚 PDF بفرست تا به کتابخانه برود\n🖼 عکس بفرست برای کاور\n💰 قیمت روز',MENU)
+              elif t=='/price' or t=='💰 قیمت روز':
+                  usdt=0;oz=0
+                  try:usdt=int(json.loads(get(SITE+'/price.json')).get('usdt',0))
+                  except Exception:pass
+                  try:oz=float(json.loads(get('https://api.gold-api.com/price/XAU',10)).get('price',0))
+                  except Exception:pass
+                  send('💹 تتر: '+str(usdt)+' تومان\n🪙 انس: '+str(oz)+' دلار')
+              elif t=='/auto' or t=='🎲 پست از مخزن':
+                  send('🎲 در حال ساخت پست از مخزن…');run_studio({})
+              elif t=='📝 پست جدید':
+                  send('موضوع را بنویس (یا /post موضوع):')
+              elif t=='📚 افزودن PDF':
+                  send('PDF را همین‌جا بفرست:')
+              elif t=='🖼 آپلود عکس':
+                  send('عکس را همین‌جا بفرست:')
+              elif msg.get('document'):
+                  doc=msg['document']
+                  if (doc.get('mime_type') or '')=='application/pdf':
+                      send('📚 PDF دریافت شد؛ در حال خواندن…')
+                      n=ingest_pdf(tgfile(doc['file_id']),doc.get('file_name',''))
+                      send('✅ به کتابخانه اضافه شد؛ +'+str(n)+' موضوع. حالا /post یا 🎲 بزن.')
+                  else:send('فقط PDF بفرست.')
+              elif msg.get('photo'):
+                  ph=msg['photo'][-1]
+                  commit('media/custom.jpg',base64.b64encode(tgfile(ph['file_id'])).decode(),'bot photo')
+                  st=state_load();st['photo']=SITE+'/media/custom.jpg';state_save(st)
+                  send('🖼 عکس ذخیره شد؛ با 📝 یا /post، پست بعدی با همین عکس ساخته می‌شود (۱ دقیقه بعد).')
+              elif msg.get('video'):
+                  send('🎬 ویدیو دریافت شد؛ برای ارسال به کانال، لینک آن را دستی بگذار (حجم تلگرام‌بات محدود است).')
+              elif t.startswith('/img'):
+                  send('✅ در حال ساخت با تصویر دلخواه…');run_studio({'img':t[4:].strip()})
+              elif t.startswith('/post'):
+                  st=state_load();img=st.get('photo','')
+                  if img:st.pop('photo',None);state_save(st)
+                  send('✅ در حال ساخت «'+t[5:].strip()+'»…');run_studio({'topic':t[5:].strip(),'img':img})
               elif t.startswith('/'):continue
-              else:topic=t.strip()
-              send('✅ دستور دریافت شد؛ در حال ساخت بستهٔ «'+(topic or 'تصادفی')+'»…')
-              env=dict(os.environ);env['CUSTOM']=json.dumps({'topic':topic,'text':text,'img':img})
-              subprocess.run(['python3','studio.py'],env=env,timeout=300)
+              else:
+                  st=state_load();img=st.get('photo','')
+                  if img:st.pop('photo',None);state_save(st)
+                  send('✅ در حال ساخت «'+t.strip()+'»…');run_studio({'topic':t.strip(),'img':img})
+            except Exception as e:
+              send('⚠️ خطا: '+str(e)[:100])
           print('bot done',len(msgs))
           PYEND
