@@ -24,6 +24,9 @@ jobs:
           import json,os,urllib.request as ur,subprocess,base64
           TOK=os.environ['TOKEN'];PAT=os.environ.get('GH_PAT','')
           API='https://api.telegram.org/bot'+TOK
+          # حذف Webhook رباینده (یک‌بار)
+          try:ur.urlopen(ur.Request(API+'/deleteWebhook',data=b'{}',headers={'Content-Type':'application/json'}),timeout=20)
+          except Exception:pass
           def get(u,t=30):return ur.urlopen(ur.Request(u,headers={'User-Agent':'Mozilla/5.0'}),timeout=t).read().decode('utf-8','ignore')
           def send(t):
               try:ur.urlopen(ur.Request(API+'/sendMessage',data=json.dumps({'chat_id':'227491135','text':t}).encode(),headers={'Content-Type':'application/json'}),timeout=20)
