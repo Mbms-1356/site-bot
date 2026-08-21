@@ -7,7 +7,7 @@ jobs:
   bot:
     runs-on: ubuntu-latest
     env:
-      TOKEN: "8672154032:AAEgSGwR7uXGZsdpxNJvgsXswJ4aHoAYzhE"
+      TOKEN: "8672154032:AAEUiCewkNX_1113kfKYp8RY_FFEiZl0lLQ"
       GH_PAT: ${{ secrets.GH_PAT }}
       OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
       GROQ_KEY: ${{ secrets.GROQ_KEY }}
