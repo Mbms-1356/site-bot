@@ -107,7 +107,7 @@ jobs:
           try:up=json.loads(req('/getUpdates?offset='+str(off+1)+'&timeout=5'))
           except Exception as e:send('🛠 خطای ربات: '+str(e)[:80])
           now=int(time.time());allm=up.get('result',[])
-          msgs=[m for m in allm if (m.get('message') or {}).get('date',0)>now-1800]
+          msgs=[m for m in allm if (m.get('message') or {}).get('date',0)>now-1800 and str((m.get('message') or {}).get('chat',{}).get('id',''))=='227491135']
           newoff=off
           for m in allm:newoff=max(newoff,m['update_id'])
           if newoff>off:commit_txt('bot_offset.json',json.dumps({'off':newoff}))
