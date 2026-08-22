@@ -1,0 +1,86 @@
+name: sitebot
+on:
+  schedule:
+    - cron: '* * * * *'
+  workflow_dispatch:
+jobs:
+  sitebot:
+    runs-on: ubuntu-latest
+    env:
+      TOKEN: ${{ 8978486498:AAGHqmPi9FcL15tKCARHEejpW3h9ChQF0KA }}
+      GH_PAT: ${{ secrets.GH_PAT }}
+    steps:
+      - name: run
+        run: |
+          python3 - <<'PYEND'
+          import json,os,time,urllib.request as ur,base64
+          TOK=os.environ['TOKEN'];PAT=os.environ.get('GH_PAT','')
+          API='https://api.telegram.org/bot'+TOK
+          SITE='https://mbms-1356.github.io/forexin-site-'
+          def req(u,d=None,t=40):
+              return ur.urlopen(ur.Request(API+u,data=d,headers={'Content-Type':'application/json'}),timeout=t).read().decode('utf-8','ignore')
+          def get(u,t=30):return ur.urlopen(ur.Request(u,headers={'User-Agent':'Mozilla/5.0'}),timeout=t).read()
+          def send(cid,t,kb=None):
+              d={'chat_id':cid,'text':t}
+              if kb:d['reply_markup']=kb
+              try:req('/sendMessage',json.dumps(d).encode())
+              except Exception:pass
+          def commit_txt(path,s):
+              body={'message':'sitebot '+path,'content':base64.b64encode(s.encode()).decode()}
+              try:
+                  old=json.loads(get('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/'+path))
+                  body['sha']=old.get('sha')
+              except Exception:pass
+              try:ur.urlopen(ur.Request('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/'+path,data=json.dumps(body).encode(),headers={'Authorization':'token '+PAT,'User-Agent':'sb','Accept':'application/vnd.github+json'},method='PUT'),timeout=30).read()
+              except Exception:pass
+          MENU={'keyboard':[['❓ سوالات','🎟 VIP'],['🇮 تتر','💰 طلا'],['📊 معامله','🎬 دانلود'],['💬 بازخورد','📈 گزارش'],['📚 مقاله',' آزمون'],['📢 کانال','🌐 سایت'],['▶️ یوتیوب','📷 اینستا'],['🎟 لینک دعوت','🎁 لینک‌ها'],['🚀 شروع']],'resize_keyboard':True}
+          L={'کانال':'📢 کانال: https://t.me/forexin_turkaslanifree','سایت':'🌐 سایت: https://mbms-1356.github.io/forexin-site-/','یوتیوب':'▶️ یوتیوب: https://youtube.com/@Forexin.turkaslani','اینستا':'📷 اینستاگرام: @Forexin.turkaslani','تتر':'💱 تتر: https://nobitex.ir/price/usdt','دعوت':'🎟 لینک دعوت: https://t.me/forexin_turkaslanifree'}
+          def prices():
+              usdt=0;oz=0
+              try:usdt=int(json.loads(get(SITE+'price.json')).get('usdt',0))
+              except Exception:pass
+              try:oz=float(json.loads(get('https://api.gold-api.com/price/XAU',10)).get('price',0))
+              except Exception:pass
+              return usdt,oz
+          try:req('/deleteWebhook',b'{}')
+          except Exception:pass
+          off=0
+          try:off=int(json.loads(get(SITE+'sitebot_offset.json')).get('off',0))
+          except Exception:pass
+          up={'result':[]}
+          try:up=json.loads(req('/getUpdates?offset='+str(off+1)+'&timeout=5'))
+          except Exception:pass
+          allm=up.get('result',[])
+          now=int(time.time())
+          msgs=[m for m in allm if (m.get('message') or {}).get('date',0)>now-1800]
+          newoff=off
+          for m in allm:newoff=max(newoff,m['update_id'])
+          if newoff>off:commit_txt('sitebot_offset.json',json.dumps({'off':newoff}))
+          for m in msgs:
+            msg=m.get('message') or {}
+            t=msg.get('text','');cid=msg.get('chat',{}).get('id')
+            if not cid:continue
+            try:
+              usdt,oz=prices()
+              if t in('/start','🚀 شروع'):
+                  send(cid,'سلام! 🖐\nمن دستیار فارکسین ترک اصلانی هستم.\n📊 ژورنال | 💰 قیمت |  دانلود | 📚 آموزش',MENU)
+              elif t=='🇮🇷 تتر':send(cid,'💵 تتر: '+str(usdt)+' تومان')
+              elif t=='💰 طلا':send(cid,'🪙 انس: '+str(oz)+' دلار')
+              elif t=='📊 معامله':send(cid,'📊 برای معامله: '+L['تتر']+'\n⚠️ اول مدیریت ریسک!')
+              elif t=='📢 کانال':send(cid,L['کانال'])
+              elif t=='🌐 سایت':send(cid,L['سایت'])
+              elif t=='▶️ یوتیوب':send(cid,L['یوتیوب'])
+              elif t=='📷 اینستا':send(cid,L['اینستا'])
+              elif t=='🎟 لینک دعوت':send(cid,L['دعوت'])
+              elif t=='🎁 لینک‌ها':send(cid,L['کانال']+'\n'+L['سایت']+'\n'+L['یوتیوب']+'\n'+L['اینستا'])
+              elif t=='🎬 دانلود':send(cid,'🎬 دانلودها: '+L['کانال'])
+              elif t=='📚 مقاله':send(cid,'📚 مقاله‌ها: '+L['سایت'])
+              elif t=='🧠 آزمون':send(cid,'🧠 آزمون: به‌زودی! فعلاً آموزش‌ها در '+L['کانال'])
+              elif t=='📈 گزارش':send(cid,'📈 گزارش روزانه: '+L['کانال'])
+              elif t=='💬 بازخورد':send(cid,'💬 بازخوردت را همین‌جا بنویس؛ می‌خوانیم!')
+              elif t=='❓ سوالات':send(cid,'❓ سوالت را بنویس یا به کانال برو: '+L['کانال'])
+              elif t=='🎟 VIP':send(cid,'🎟 بخش VIP: برای عضویت پیام بده.')
+              else:send(cid,'دکمه‌ها را ببین 👇',MENU)
+            except Exception:pass
+          print('sitebot done',len(msgs))
+          PYEND
