@@ -1,0 +1,18 @@
+name: run2
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      TOKEN_SITE: ${{ secrets.TOKEN_SITE }}
+      GH_TOKEN: ${{ secrets.GH_PAT }}
+      GH_REPO: Mbms-1356/site-bot
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        run: pip install pyTelegramBotAPI yt-dlp requests >/dev/null 2>&1
+      - name: run bot2
+        run: python3 bot2.py
