@@ -90,7 +90,9 @@ jobs:
               if len(text)<200:return 0
               out=ask('از متن فارکس فقط JSON: {"topics":[۶ موضوع فارسی کوتاه],"quotes":[۴ جمله طلایی/بزرگان],"facts":[۶ نکته],"hooks":[۴ قلاب]}',text)
               out=out.replace('```json','').replace('```','');i=out.find('{');j=out.rfind('}')
-              obj=json.loads(out[i:j+1])
+              if i<0 or j<=i:return 0
+              try:obj=json.loads(out[i:j+1])
+              except Exception:return 0
               vault={'principles':[],'quotes':[],'hooks':[],'lit_facts':[]}
               try:vault.update(json.loads(get(SITE+'/vault.json')))
               except Exception:pass
@@ -164,7 +166,7 @@ jobs:
             t=msg.get('text','')
             try:
               st0=state_load()
-              if st0.get('pending_pdf') and t:
+              if st0.get('pending_pdf') and t and not t.startswith('/'):
                   data=tgfile(st0['pending_pdf'])
                   n=ingest_pdf(data,st0.get('pending_name',''),pw=t)
                   st0.pop('pending_pdf',None);st0.pop('pending_name',None);state_save(st0)
@@ -203,7 +205,8 @@ jobs:
                       if n==-1:
                           st=state_load();st['pending_pdf']=doc['file_id'];st['pending_name']=doc.get('file_name','');state_save(st)
                           send('🔒 این PDF رمز دارد؛ رمز را بفرست:')
-                      else:send('✅ به کتابخانه اضافه شد؛ +'+str(n)+' موضوع (+عکس‌های PDF استخراج شد).')
+                      elif n>0:send('✅ به کتابخانه اضافه شد؛ +'+str(n)+' موضوع (+عکس‌های PDF استخراج شد).')
+                      else:send('⚠️ این PDF متن قابل‌خواندن ندارد (اسکن/تصویر است)؛ فقط عکس‌هایش استخراج شد.')
                   elif name.endswith('.docx'):
                       send('✅ Word خوانده شد؛ +'+str(ingest_text(read_docx(data)))+' موضوع.')
                   elif name.endswith('.txt'):
