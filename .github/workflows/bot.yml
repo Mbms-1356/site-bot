@@ -43,6 +43,7 @@ jobs:
               try:ur.urlopen(ur.Request('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/'+path,data=json.dumps(body).encode(),headers={'Authorization':'token '+PAT,'User-Agent':'bot','Accept':'application/vnd.github+json'},method='PUT'),timeout=30).read()
               except Exception:pass
           def commit_txt(path,s):commit(path,base64.b64encode(s.encode()).decode(),'bot '+path)
+          def commit_bin(path,b):commit(path,base64.b64encode(b).decode(),'bot '+path)
           def state_load():
               try:return json.loads(get(SITE+'/bot_state.json'))
               except Exception:return {}
@@ -55,6 +56,7 @@ jobs:
                   pref=[m for m in free if any(k in m.lower() for k in ['qwen','llama','mistral','deepseek','gemini','alpha'])]
                   models=(pref or free)[:2]
               except Exception:pass
+          VISION=['meta-llama/llama-3.2-11b-vision-instruct:free','google/gemma-3-4b-it:free']
           def ask(s,u):
               for m in models:
                   try:
@@ -66,6 +68,15 @@ jobs:
                   try:
                       r=ur.urlopen(ur.Request('https://api.groq.com/openai/v1/chat/completions',data=json.dumps({'model':'llama-3.3-70b-versatile','messages':[{'role':'user','content':s+'\n'+u}],'max_tokens':1600}).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+GK}),timeout=60).read().decode()
                       return json.loads(r)['choices'][0]['message']['content']
+                  except Exception:pass
+              return ''
+          def read_img_text(b64):
+              for vm in VISION:
+                  try:
+                      body={'model':vm,'messages':[{'role':'user','content':[{'type':'text','text':'متن داخل این تصویر را بخوان و برگردان؛ سپس یک کپشن اینستاگرام احساسی و ۵ هشتگ سئو بر اساس همان متن بنویس.'},{'type':'image_url','image_url':{'url':'data:image/jpeg;base64,'+b64}}]}],'max_tokens':600}
+                      r=ur.urlopen(ur.Request('https://openrouter.ai/api/v1/chat/completions',data=json.dumps(body).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+OR}),timeout=60).read().decode()
+                      c=json.loads(r)['choices'][0]['message']['content']
+                      if c:return c
                   except Exception:pass
               return ''
           def tgfile(fid):
@@ -91,7 +102,7 @@ jobs:
                   if h not in vault['hooks']:vault['hooks'].append(h)
               for f in obj.get('facts',[]):
                   if f not in vault['lit_facts']:vault['lit_facts'].append(f)
-              for k in vault:vault[k]=vault[k][-80:]
+              for k in vault:vault[k]=vault[k][-300:]
               commit_txt('vault.json',json.dumps(vault,ensure_ascii=False))
               return len(obj.get('topics',[]))
           def ingest_pdf(data,name,pw=''):
@@ -106,6 +117,16 @@ jobs:
                   if not ok:return -1
               text=''
               for pg in rd.pages[:10]:text+=(pg.extract_text() or '')
+              cnt=0
+              try:
+                  ts=int(time.time())
+                  for pi,pg in enumerate(rd.pages[:6]):
+                      for im in pg.images[:2]:
+                          b=im.data
+                          if 5000<len(b)<300000:
+                              commit_bin('media/pdfimg_%d_%d.jpg'%(ts,cnt),b);cnt+=1
+                      if cnt>=2:break
+              except Exception:pass
               return ingest_text(text)
           def read_docx(data):
               z=zipfile.ZipFile(io.BytesIO(data))
@@ -151,7 +172,7 @@ jobs:
                   else:send('❌ رمز اشتباه است؛ PDF را دوباره بفرست.')
                   continue
               if t=='/start' or t=='❓ راهنما':
-                  send('🦁 دستیار فارکسین:\n📦 بسته کامل | 🎲 پست از مخزن\n🖼 عکس | ✍️ کپشن | 🎬 ریلز\n📚 PDF/Word/TXT بفرست = کتابخانه\n🖼 عکس بفرست = کاور\n💰 قیمت روز',MENU)
+                  send('🦁 دستیار فارکسین:\n📦 بسته کامل | 🎲 پست از مخزن\n🖼 عکس | ✍️ کپشن | 🎬 ریلز\n📚 PDF/Word/TXT = کتابخانه + استخراج عکس\n🖼 عکس بفرست = کاور + خواندن متنِ عکس برای کپشن/سئو\n💰 قیمت روز',MENU)
               elif t=='/price' or t=='💰 قیمت روز':
                   usdt=0;oz=0
                   try:usdt=int(json.loads(get(SITE+'/price.json')).get('usdt',0))
@@ -182,7 +203,7 @@ jobs:
                       if n==-1:
                           st=state_load();st['pending_pdf']=doc['file_id'];st['pending_name']=doc.get('file_name','');state_save(st)
                           send('🔒 این PDF رمز دارد؛ رمز را بفرست:')
-                      else:send('✅ به کتابخانه اضافه شد؛ +'+str(n)+' موضوع.')
+                      else:send('✅ به کتابخانه اضافه شد؛ +'+str(n)+' موضوع (+عکس‌های PDF استخراج شد).')
                   elif name.endswith('.docx'):
                       send('✅ Word خوانده شد؛ +'+str(ingest_text(read_docx(data)))+' موضوع.')
                   elif name.endswith('.txt'):
@@ -192,22 +213,30 @@ jobs:
                   else:send('فقط PDF / Word / TXT بفرست.')
               elif msg.get('photo'):
                   ph=msg['photo'][-1]
-                  commit('media/custom.jpg',base64.b64encode(tgfile(ph['file_id'])).decode(),'bot photo')
-                  st=state_load();st['photo']=SITE+'/media/custom.jpg';state_save(st)
-                  send('🖼 عکس ذخیره شد؛ پست بعدی با همین عکس (۱ دقیقه بعد).')
+                  data=tgfile(ph['file_id'])
+                  fn='media/img_%d.jpg'%int(time.time())
+                  commit_bin(fn,data)
+                  st=state_load();st['photo']=SITE+fn;state_save(st)
+                  cap=read_img_text(base64.b64encode(data).decode())
+                  if cap:
+                      st=state_load();st['text']=cap;state_save(st)
+                      send('🖼 عکس ذخیره شد؛ متنِ عکس خوانده شد و برای کپشن/سئو استفاده می‌شود:\n'+cap[:300])
+                  else:
+                      send('🖼 عکس ذخیره شد؛ پست بعدی با همین عکس (۱ دقیقه بعد).')
               elif msg.get('video'):
                   send('🎬 ویدیو دریافت شد؛ به‌دلیل محدودیت حجم، لینکش را دستی بگذار.')
               elif t.startswith('/img'):
                   send('✅ در حال ساخت با تصویر دلخواه…');run_studio({'img':t[4:].strip(),'mode':'full'})
               elif t.startswith('/post'):
-                  st=state_load();img=st.get('photo','');st.pop('photo',None);state_save(st)
-                  send('✅ در حال ساخت «'+t[5:].strip()+'»…');run_studio({'topic':t[5:].strip(),'img':img,'mode':'full'})
+                  st=state_load();img=st.get('photo','');txtv=st.get('text','');st.pop('photo',None);st.pop('text',None);state_save(st)
+                  send('✅ در حال ساخت «'+t[5:].strip()+'»…');run_studio({'topic':t[5:].strip(),'img':img,'text':txtv,'mode':'full'})
               elif t.startswith('/'):continue
               else:
-                  st=state_load();img=st.get('photo','');mode=st.pop('mode','full')
+                  st=state_load();img=st.get('photo','');txtv=st.get('text','');mode=st.pop('mode','full')
                   if img:st.pop('photo',None)
+                  if txtv:st.pop('text',None)
                   state_save(st)
-                  send('✅ در حال ساخت…');run_studio({'topic':t.strip(),'img':img,'mode':mode})
+                  send('✅ در حال ساخت…');run_studio({'topic':t.strip(),'img':img,'text':txtv,'mode':mode})
             except Exception as e:
               send('⚠️ خطا: '+str(e)[:100])
           print('bot done',len(msgs))
