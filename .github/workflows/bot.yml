@@ -74,9 +74,17 @@ jobs:
           def run_studio(c):
               env=dict(os.environ);env['CUSTOM']=json.dumps(c)
               subprocess.run(['python3','studio.py'],env=env,timeout=300)
-          def ingest_pdf(data,name):
+          def ingest_pdf(data,name,pw=''):
               from pypdf import PdfReader
-              rd=PdfReader(io.BytesIO(data));text=''
+              rd=PdfReader(io.BytesIO(data))
+              if rd.is_encrypted:
+                  ok=False
+                  for p in [pw,'','1234','12345','123456','password','admin','0000']:
+                      try:
+                          if rd.decrypt(p):ok=True;break
+                      except Exception:pass
+                  if not ok:return -1
+              text=''
               for pg in rd.pages[:10]:text+=(pg.extract_text() or '')
               text=text[:9000]
               if len(text)<200:return 0
@@ -116,8 +124,16 @@ jobs:
             msg=m.get('message') or {}
             t=msg.get('text','')
             try:
+              st0=state_load()
+              if st0.get('pending_pdf') and t:
+                  data=tgfile(st0['pending_pdf'])
+                  n=ingest_pdf(data,st0.get('pending_name',''),pw=t)
+                  st0.pop('pending_pdf',None);st0.pop('pending_name',None);state_save(st0)
+                  if n>=0:send('✅ رمز درست بود؛ به کتابخانه اضافه شد؛ +'+str(n)+' موضوع.')
+                  else:send('❌ رمز اشتباه است؛ PDF را دوباره بفرست.')
+                  continue
               if t=='/start' or t=='❓ راهنما':
-                  send('🦁 دستیار فارکسین:\n📦 بسته کامل = عکس+کپشن+ریلز+کارت\n🎲 پست از مخزن\n🖼 فقط عکس | ✍️ فقط کپشن | 🎬 فقط ریلز\n📚 PDF بفرست = کتابخانه\n🖼 عکس بفرست = کاور\n💰 قیمت روز',MENU)
+                  send('🦁 دستیار فارکسین:\n📦 بسته کامل = عکس+کپشن+ریلز+کارت\n🎲 پست از مخزن\n🖼 فقط عکس | ✍️ فقط کپشن | 🎬 فقط ریلز\n📚 PDF بفرست = کتابخانه (اگر رمز داشت، می‌پرسم)\n🖼 عکس بفرست = کاور\n💰 قیمت روز',MENU)
               elif t=='/price' or t=='💰 قیمت روز':
                   usdt=0;oz=0
                   try:usdt=int(json.loads(get(SITE+'/price.json')).get('usdt',0))
@@ -143,8 +159,13 @@ jobs:
                   doc=msg['document']
                   if (doc.get('mime_type') or '')=='application/pdf':
                       send('📚 PDF دریافت شد؛ در حال خواندن…')
-                      n=ingest_pdf(tgfile(doc['file_id']),doc.get('file_name',''))
-                      send('✅ به کتابخانه اضافه شد؛ +'+str(n)+' موضوع.')
+                      data=tgfile(doc['file_id'])
+                      n=ingest_pdf(data,doc.get('file_name',''))
+                      if n==-1:
+                          st=state_load();st['pending_pdf']=doc['file_id'];st['pending_name']=doc.get('file_name','');state_save(st)
+                          send('🔒 این PDF رمز دارد؛ رمز را بفرست:')
+                      else:
+                          send('✅ به کتابخانه اضافه شد؛ +'+str(n)+' موضوع.')
                   else:send('فقط PDF بفرست.')
               elif msg.get('photo'):
                   ph=msg['photo'][-1]
