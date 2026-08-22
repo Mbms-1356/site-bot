@@ -5,7 +5,7 @@ from telebot import types
 import yt_dlp
 import requests
 
-TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '').strip()
+TOKEN = os.environ.get('TOKEN_SITE', '').strip() or os.environ.get('TELEGRAM_BOT_TOKEN', '').strip()
 if not TOKEN:
     try:
         with open(os.path.join(os.path.expanduser('~'), 'token.txt')) as f:
@@ -824,24 +824,27 @@ def notifier():
             if key != last:
                 last = key
                 hm = (now.hour, now.minute)
-                if hm == (8, 0) and now.strftime('%Y-%m-%d') != last_cal_day:
-                    last_cal_day = now.strftime('%Y-%m-%d')
-                    n = news_today()
-                    if n: post_all(n)
-                if hm == (9, 0) and now.strftime('%Y-%m-%d') != last_quote_day:
-                    last_quote_day = now.strftime('%Y-%m-%d')
-                    q = QUOTES[now.timetuple().tm_yday % len(QUOTES)]
-                    post_all(f"🌟 <b>جملهٔ روز:</b>\n💡 {q}")
-                if hm == (9, 30): post_all('🟠 سشن فرانکفورت')
-                if hm == (10, 30): post_all('🟢 سشن لندن')
-                if hm == (15, 0) and now.strftime('%Y-%m-%d') != last_news_day:
-                    last_news_day = now.strftime('%Y-%m-%d')
-                    msg = '📰 قبل از نیویورک: اخبار را چک کنید.'
-                    if now.weekday() == 4 and now.day <= 7:
-                        msg += '\n⚠️ <b>NFP!</b>'
-                    post_all(msg)
-                if hm == (15, 30): post_all('🟢 سشن نیویورک')
-                if hm == (19, 30): post_all('🔴 لندن بسته شد')
+                wd = now.weekday()
+                weekend = wd >= 5
+                if not weekend:
+                    if hm == (8, 0) and now.strftime('%Y-%m-%d') != last_cal_day:
+                        last_cal_day = now.strftime('%Y-%m-%d')
+                        n = news_today()
+                        if n: post_all(n)
+                    if hm == (9, 0) and now.strftime('%Y-%m-%d') != last_quote_day:
+                        last_quote_day = now.strftime('%Y-%m-%d')
+                        q = QUOTES[now.timetuple().tm_yday % len(QUOTES)]
+                        post_all(f"🌟 <b>جملهٔ روز:</b>\n💡 {q}")
+                    if hm == (9, 30): post_all('🟠 سشن فرانکفورت باز شد؛ اولین موج نقدینگی اروپا در راه است.')
+                    if hm == (10, 30): post_all('🟢 سشن لندن باز شد؛ بیشترین حجم معاملات روز اینجاست.')
+                    if hm == (15, 0) and now.strftime('%Y-%m-%d') != last_news_day:
+                        last_news_day = now.strftime('%Y-%m-%d')
+                        msg = '📰 قبل از نیویورک: اخبار را چک کنید.'
+                        if wd == 4 and now.day <= 7:
+                            msg += '\n⚠️ <b>NFP!</b>'
+                        post_all(msg)
+                    if hm == (15, 30): post_all('🔵 سشن نیویورک باز شد؛ هم‌پوشانی لندن+نیویورک = بیشترین نوسان روز.')
+                    if hm == (19, 30): post_all('🔴 سشن لندن بسته شد؛ معامله‌گران اروپا از بازار خارج شدند.')
         except Exception: pass
         _t.sleep(20)
 
