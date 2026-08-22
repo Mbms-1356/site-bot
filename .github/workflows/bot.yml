@@ -22,7 +22,7 @@ jobs:
         run: |
           curl -s "https://mbms-1356.github.io/forexin-site-/studio.py?v=$(date +%s)" -o studio.py
           python3 - <<'PYEND'
-          import json,os,io,time,urllib.request as ur,subprocess,base64
+          import json,os,io,re,time,urllib.request as ur,subprocess,base64,zipfile
           TOK=os.environ['TOKEN'];PAT=os.environ.get('GH_PAT','');OR=os.environ.get('OPENROUTER_KEY','');GK=os.environ.get('GROQ_KEY','');EVT=os.environ.get('EVENT','')
           API='https://api.telegram.org/bot'+TOK
           SITE='https://mbms-1356.github.io/forexin-site-'
@@ -74,18 +74,7 @@ jobs:
           def run_studio(c):
               env=dict(os.environ);env['CUSTOM']=json.dumps(c)
               subprocess.run(['python3','studio.py'],env=env,timeout=300)
-          def ingest_pdf(data,name,pw=''):
-              from pypdf import PdfReader
-              rd=PdfReader(io.BytesIO(data))
-              if rd.is_encrypted:
-                  ok=False
-                  for p in [pw,'','1234','12345','123456','password','admin','0000']:
-                      try:
-                          if rd.decrypt(p):ok=True;break
-                      except Exception:pass
-                  if not ok:return -1
-              text=''
-              for pg in rd.pages[:10]:text+=(pg.extract_text() or '')
+          def ingest_text(text):
               text=text[:9000]
               if len(text)<200:return 0
               out=ask('از متن فارکس فقط JSON: {"topics":[۶ موضوع فارسی کوتاه],"quotes":[۴ جمله طلایی/بزرگان],"facts":[۶ نکته],"hooks":[۴ قلاب]}',text)
@@ -105,6 +94,35 @@ jobs:
               for k in vault:vault[k]=vault[k][-80:]
               commit_txt('vault.json',json.dumps(vault,ensure_ascii=False))
               return len(obj.get('topics',[]))
+          def ingest_pdf(data,name,pw=''):
+              from pypdf import PdfReader
+              rd=PdfReader(io.BytesIO(data))
+              if rd.is_encrypted:
+                  ok=False
+                  for p in [pw,'','1234','12345','123456','password','admin','0000']:
+                      try:
+                          if rd.decrypt(p):ok=True;break
+                      except Exception:pass
+                  if not ok:return -1
+              text=''
+              for pg in rd.pages[:10]:text+=(pg.extract_text() or '')
+              return ingest_text(text)
+          def read_docx(data):
+              z=zipfile.ZipFile(io.BytesIO(data))
+              x=z.read('word/document.xml').decode('utf-8','ignore')
+              x=x.replace('</w:p>','\n')
+              x=re.sub(r'<[^>]+>',' ',x)
+              return x
+          def read_txt(data):
+              for enc in ['utf-8','cp1256','latin-1']:
+                  try:return data.decode(enc)
+                  except Exception:pass
+              return ''
+          def read_rtf(data):
+              s=data.decode('latin-1','ignore')
+              s=re.sub(r'\\[a-z]+-?\d* ?','',s)
+              s=re.sub(r'[{}]','',s)
+              return s
           MENU={'keyboard':[['📦 بسته کامل','🎲 پست از مخزن'],['🖼 ساخت عکس','✍️ نوشتن کپشن'],['🎬 ساخت ریلز','📚 افزودن PDF'],['🖼 آپلود عکس','💰 قیمت روز'],['❓ راهنما']],'resize_keyboard':True}
           try:req('/deleteWebhook',b'{}')
           except Exception:pass
@@ -133,7 +151,7 @@ jobs:
                   else:send('❌ رمز اشتباه است؛ PDF را دوباره بفرست.')
                   continue
               if t=='/start' or t=='❓ راهنما':
-                  send('🦁 دستیار فارکسین:\n📦 بسته کامل = عکس+کپشن+ریلز+کارت\n🎲 پست از مخزن\n🖼 فقط عکس | ✍️ فقط کپشن | 🎬 فقط ریلز\n📚 PDF بفرست = کتابخانه (اگر رمز داشت، می‌پرسم)\n🖼 عکس بفرست = کاور\n💰 قیمت روز',MENU)
+                  send('🦁 دستیار فارکسین:\n📦 بسته کامل | 🎲 پست از مخزن\n🖼 عکس | ✍️ کپشن | 🎬 ریلز\n📚 PDF/Word/TXT بفرست = کتابخانه\n🖼 عکس بفرست = کاور\n💰 قیمت روز',MENU)
               elif t=='/price' or t=='💰 قیمت روز':
                   usdt=0;oz=0
                   try:usdt=int(json.loads(get(SITE+'/price.json')).get('usdt',0))
@@ -152,21 +170,26 @@ jobs:
               elif t=='🎬 ساخت ریلز':
                   st=state_load();st['mode']='vid';state_save(st);send('موضوع را بنویس تا فقط ریلز بسازم:')
               elif t=='📚 افزودن PDF':
-                  send('PDF را همین‌جا بفرست:')
+                  send('فایل (PDF/Word/TXT) را همین‌جا بفرست:')
               elif t=='🖼 آپلود عکس':
                   send('عکس را همین‌جا بفرست:')
               elif msg.get('document'):
-                  doc=msg['document']
-                  if (doc.get('mime_type') or '')=='application/pdf':
-                      send('📚 PDF دریافت شد؛ در حال خواندن…')
-                      data=tgfile(doc['file_id'])
+                  doc=msg['document'];name=(doc.get('file_name') or '').lower()
+                  send('📚 دریافت شد؛ در حال خواندن…')
+                  data=tgfile(doc['file_id'])
+                  if name.endswith('.pdf'):
                       n=ingest_pdf(data,doc.get('file_name',''))
                       if n==-1:
                           st=state_load();st['pending_pdf']=doc['file_id'];st['pending_name']=doc.get('file_name','');state_save(st)
                           send('🔒 این PDF رمز دارد؛ رمز را بفرست:')
-                      else:
-                          send('✅ به کتابخانه اضافه شد؛ +'+str(n)+' موضوع.')
-                  else:send('فقط PDF بفرست.')
+                      else:send('✅ به کتابخانه اضافه شد؛ +'+str(n)+' موضوع.')
+                  elif name.endswith('.docx'):
+                      send('✅ Word خوانده شد؛ +'+str(ingest_text(read_docx(data)))+' موضوع.')
+                  elif name.endswith('.txt'):
+                      send('✅ TXT خوانده شد؛ +'+str(ingest_text(read_txt(data)))+' موضوع.')
+                  elif name.endswith('.rtf'):
+                      send('✅ RTF خوانده شد؛ +'+str(ingest_text(read_rtf(data)))+' موضوع.')
+                  else:send('فقط PDF / Word / TXT بفرست.')
               elif msg.get('photo'):
                   ph=msg['photo'][-1]
                   commit('media/custom.jpg',base64.b64encode(tgfile(ph['file_id'])).decode(),'bot photo')
