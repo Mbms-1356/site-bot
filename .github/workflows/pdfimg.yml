@@ -1,0 +1,32 @@
+name: pdfimg
+on: [workflow_dispatch]
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    env:
+      GH_PAT: ${{ secrets.GH_PAT }}
+    steps:
+      - run: |
+          pip install pypdf >/dev/null 2>&1
+          python3 - <<'PY'
+          import io,urllib.request as ur,base64,json,os
+          from pypdf import PdfReader
+          PAT=os.environ['GH_PAT']
+          def get(u):return ur.urlopen(ur.Request(u,headers={'User-Agent':'x'}),timeout=60).read()
+          def commit(path,b):
+              body={'message':'pdfimg','content':base64.b64encode(b).decode()}
+              try:
+                  old=json.loads(get('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/'+path));body['sha']=old['sha']
+              except Exception:pass
+              ur.urlopen(ur.Request('https://api.github.com/repos/Mbms-1356/forexin-site-/contents/'+path,data=json.dumps(body).encode(),headers={'Authorization':'token '+PAT,'User-Agent':'x','Accept':'application/vnd.github+json'},method='PUT'),timeout=30).read()
+          data=get('https://raw.githubusercontent.com/Mbms-1356/forexin-site-/main/lit.pdf')
+          rd=PdfReader(io.BytesIO(data));n=0
+          for pg in rd.pages:
+              for im in pg.images:
+                  b=im.data
+                  if len(b)>8000 and (b[:2]==b'\xff\xd8' or b[:4]==b'\x89PNG'):
+                      commit('media/lit_%d.jpg'%n,b);n+=1
+                  if n>=10:break
+              if n>=10:break
+          print('extracted',n)
+          PY
