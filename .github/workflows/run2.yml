@@ -3,6 +3,9 @@ on:
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch:
+concurrency:
+  group: run2-single
+  cancel-in-progress: false
 jobs:
   run:
     runs-on: ubuntu-latest
