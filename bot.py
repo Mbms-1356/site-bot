@@ -70,7 +70,7 @@ def save_trades():
     except Exception: pass
 
 def ensure_admin(uid):
-    global ADMIN:
+    global ADMIN
     if ADMIN is None and uid == 227491135:
         ADMIN = uid
         try:
