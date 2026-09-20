@@ -1,0 +1,21 @@
+name: signals
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+concurrency:
+  group: signals-single
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TOKEN_SIGNALS }}
+      GH_TOKEN: ${{ secrets.GH_PAT }}
+      GH_REPO: Mbms-1356/site-bot
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        run: pip install pyTelegramBotAPI yt-dlp requests
+      - name: run bot
+        run: python3 bot.py
