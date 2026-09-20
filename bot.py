@@ -70,8 +70,8 @@ def save_trades():
     except Exception: pass
 
 def ensure_admin(uid):
-    global ADMIN
-   if ADMIN is None and uid == 227491135:
+    global ADMIN:
+    if ADMIN is None and uid == 227491135:
         ADMIN = uid
         try:
             with open(ADMIN_FILE, 'w') as f: json.dump({'id': uid}, f)
