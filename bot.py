@@ -22,6 +22,9 @@ bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
 SITE = 'https://mbms-1356.github.io/forexin-site-/'
 CHANNEL = 'https://t.me/forexin_turkaslanifree'
 CHANNEL_POST = '@forexin_turkaslanifree'
+FREE_CHANNEL = '@forexin_turkaslanifree'
+GUIDE_AUDIO = 'guide_fa.wav'
+GUIDE_AUDIO = 'guide_fa.wav'
 GROUP = 'https://t.me/forexinturkaslanilitcommuniti'
 MAINBOT = 'https://t.me/TurkaslaniFx_bot'
 INSTA = 'https://www.instagram.com/forexin.turkaslani'
@@ -119,6 +122,7 @@ def build_menu():
     m.add(types.InlineKeyboardButton('🕒 وضعیت سشن‌ها', callback_data='sessions'))
     m.add(types.InlineKeyboardButton('🎯 چالش روز', callback_data='challenge'))
     m.add(types.InlineKeyboardButton('📊 پیشرفت من', callback_data='challenge_progress'))
+    m.add(types.InlineKeyboardButton('📖 راهنمای استفاده', callback_data='guide'), types.InlineKeyboardButton('🤖 معرفی سیستم', callback_data='about'))
     m.add(types.InlineKeyboardButton(MENU[4], callback_data='dl'), types.InlineKeyboardButton(MENU[5], callback_data='tr'))
     m.add(types.InlineKeyboardButton(MENU[6], callback_data='rp'), types.InlineKeyboardButton(MENU[7], callback_data='fb'))
     m.add(types.InlineKeyboardButton(MENU[8], url=QUIZ), types.InlineKeyboardButton(MENU[9], url=SITE))
@@ -134,9 +138,34 @@ def group_menu():
     m.add(types.InlineKeyboardButton('🕒 وضعیت سشن‌ها', callback_data='sessions'))
     m.add(types.InlineKeyboardButton('🎯 چالش روز', callback_data='challenge'))
     m.add(types.InlineKeyboardButton('📊 پیشرفت من', callback_data='challenge_progress'))
+    m.add(types.InlineKeyboardButton('📖 راهنمای استفاده', callback_data='guide'), types.InlineKeyboardButton('🤖 معرفی سیستم', callback_data='about'))
     m.add(types.InlineKeyboardButton('📜 قوانین', callback_data='rules'), types.InlineKeyboardButton('🧠 آزمون', url=QUIZ))
     m.add(types.InlineKeyboardButton('🎁 لینک‌ها', callback_data='inv'), types.InlineKeyboardButton('🚀 شروع', callback_data='st'))
     return m
+
+def join_menu():
+    m = types.InlineKeyboardMarkup(row_width=1)
+    m.add(types.InlineKeyboardButton('📢 عضویت در کانال فری', url=CHANNEL))
+    m.add(types.InlineKeyboardButton('✅ بررسی عضویت', callback_data='join_check'))
+    m.add(types.InlineKeyboardButton('📖 راهنمای استفاده', callback_data='guide'))
+    m.add(types.InlineKeyboardButton('🔊 راهنمای صوتی', callback_data='guide_audio'))
+    return m
+
+def is_free_member(uid):
+    try:
+        member = bot.get_chat_member(FREE_CHANNEL, uid)
+        return member.status in ('creator', 'administrator', 'member')
+    except Exception:
+        return False
+
+def send_join_gate(chat):
+    bot.send_message(chat, '🔒 برای استفاده از امکانات ربات، ابتدا عضو کانال فری شوید و سپس «بررسی عضویت» را بزنید.\n\nراهنمای متنی و صوتی برای آشنایی شما آزاد است.', reply_markup=join_menu())
+
+def guide_text():
+    return f"📖 <b>راهنمای استفاده از Forexin</b>\n\n۱. ابتدا عضو کانال فری شوید.\n۲. دکمه «بررسی عضویت» را بزنید.\n۳. از منو قیمت طلا و تتر، اخبار اقتصادی، وضعیت سشن‌ها و چالش روز را استفاده کنید.\n۴. از «پیشرفت من» امتیاز، streak و نشان‌های آموزشی خود را ببینید.\n۵. برای آموزش بیشتر از کانال آکادمی، گروه و یوتیوب استفاده کنید.\n\n🔗 کانال فری: {CHANNEL}\n🎓 آکادمی: @Forexin_Turkaslani_Base\n💬 گروه: {GROUP}\n▶️ یوتیوب: {YOUTUBE}\n\n⚠️ همه مطالب آموزشی‌اند و توصیه خرید یا فروش نیستند."
+
+def about_text():
+    return f"🤖 <b>سیستم Forexin</b>\n\nربات سیگنال برای قیمت‌ها، اخبار، سشن‌ها و اطلاع‌رسانی آموزشی طراحی شده است. ربات سایت برای آموزش، دانلود، مقاله و مسیر یادگیری استفاده می‌شود.\n\n📢 پیام‌های خودکار سشن‌ها فقط یک‌بار در کانال فری منتشر می‌شوند تا پیام تکراری ارسال نشود.\n\n{CHANNEL}\n{MAINBOT}"
 
 def fetch_json(url):
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
@@ -378,6 +407,9 @@ def start(m):
         ensure_admin(uid)
         bot.send_message(uid, '🛠️ <b>شما ادمین شدید!</b>')
         return
+    if not is_free_member(uid):
+        send_join_gate(uid)
+        return
     USERS.add(uid)
     bot.send_message(uid, WELCOME_PRIV, reply_markup=build_menu())
 
@@ -387,8 +419,27 @@ def cb(c):
     uid = c.from_user.id
     d = c.data
     try:
+        if c.message.chat.type == 'private' and not ensure_admin(uid) and d not in ('join_check', 'guide', 'guide_audio', 'about') and not is_free_member(uid):
+            send_join_gate(chat)
+            bot.answer_callback_query(c.id, 'ابتدا عضو کانال فری شوید.')
+            return
         if d == 'st':
             bot.send_message(chat, WELCOME_PRIV, reply_markup=build_menu())
+        elif d == 'join_check':
+            if is_free_member(uid):
+                bot.send_message(chat, '✅ عضویت شما تأیید شد. اکنون همه امکانات فعال است.', reply_markup=build_menu())
+            else:
+                send_join_gate(chat)
+        elif d == 'guide':
+            bot.send_message(chat, guide_text(), reply_markup=join_menu() if not is_free_member(uid) else build_menu())
+        elif d == 'guide_audio':
+            if os.path.exists(GUIDE_AUDIO):
+                with open(GUIDE_AUDIO, 'rb') as audio:
+                    bot.send_audio(chat, audio, caption='🔊 راهنمای صوتی استفاده از Forexin')
+            else:
+                bot.send_message(chat, '🔊 راهنمای صوتی در حال آماده‌سازی است.')
+        elif d == 'about':
+            bot.send_message(chat, about_text())
         elif d == 'inv':
             bot.send_message(chat, f"🎁 <b>لینک‌های مفید:</b>\n🤖 ربات اصلی: {MAINBOT}\n💬 گروه: {GROUP}\n📢 کانال: {CHANNEL}")
         elif d == 'gold':
