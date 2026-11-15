@@ -196,7 +196,13 @@ def get_usdt_only():
                 usdt = f"{int(float(d['data']['latest']['lastPrice'])):,}"
             except Exception:
                 pass
-    return f"🇮🇷 <b>قیمت لحظه‌ای تتر:</b> {usdt} تومان"
+    return (
+        f"🇮🇷 <b>قیمت لحظه‌ای تتر:</b> {usdt} تومان\n\n"
+        "🔗 <b>مشاهده قیمت در صرافی‌های ایرانی:</b>\n"
+        '🥇 <a href="https://nobitex.ir/price/usdt/">نوبیتکس</a>\n'
+        '🥈 <a href="https://tabdeal.org/usdt-price">تبدیل</a>\n'
+        '🥉 <a href="https://www.ompfinex.com/markets/usdt-price">اُم‌فاینکس</a>'
+    )
 
 def news_today():
     try:
