@@ -1,5 +1,7 @@
 import base64, html, io, json, os, re, subprocess, tempfile, time, urllib.parse, urllib.request
 from pathlib import Path
+from content_package import make_package, score_package
+from content_control import load_index, save_package, summary
 
 TOKEN = os.environ.get('TOKEN_CONTENT_AGENT', '').strip()
 PAT = os.environ.get('GH_PAT', '').strip()
@@ -44,6 +46,20 @@ def gh_put(path, content, message, repo=SITE_REPO, binary=False):
          data=json.dumps(body).encode(), method='PUT', headers={
              'Authorization': 'Bearer ' + PAT, 'Accept': 'application/vnd.github+json',
              'Content-Type': 'application/json', 'User-Agent': 'ForexinContentAgent'})
+
+
+def gh_text(path, repo=SITE_REPO):
+    item = gh_json(path, repo)
+    if not item or 'content' not in item:
+        return ''
+    try:
+        return base64.b64decode(item['content']).decode('utf-8')
+    except Exception:
+        return ''
+
+
+def put_json(path, value, message, repo=SITE_REPO):
+    gh_put(path, json.dumps(value, ensure_ascii=False, indent=2), message, repo)
 
 
 def state_load():
@@ -167,7 +183,11 @@ def handle_post(post):
     items = [x for x in items if x.get('slug') != slug]
     items.insert(0, {'slug': slug, 'title': article.get('title',''), 'description': article.get('description',''), 'url': 'articles/' + slug + '.html', 'audio': audio_url, 'source': source_link, 'published_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})
     gh_put('articles/index.json', json.dumps(items[:200], ensure_ascii=False, indent=2), 'Update article index')
-    return 'published:' + slug + (':audio' if audio else ':text-only')
+    package = make_package(article, source_link, source, transcript, audio_url)
+    score_package(package)
+    save_package(package, lambda path: gh_text(path, SITE_REPO),
+                 lambda path, value, message: put_json(path, value, message, SITE_REPO))
+    return 'published:' + slug + (':audio' if audio else ':text-only') + ':draft-package'
 
 
 def main():
@@ -186,6 +206,19 @@ def main():
             if text == '/status':
                 tg_send(msg['chat']['id'], '✅ کارخانه محتوا فعال است و هر ۱۰ دقیقه کانال Base را بررسی می‌کند.')
                 results.append('private-status')
+                continue
+            if text in ('/control', '/drafts'):
+                index = load_index(lambda path: gh_text(path, SITE_REPO))
+                if text == '/control':
+                    tg_send(msg['chat']['id'], summary(index))
+                else:
+                    rows = index[:8]
+                    if rows:
+                        lines = ['📝 آخرین پیش‌نویس‌ها:'] + [f"• {x.get('title','بدون عنوان')} | {x.get('status','draft')} | امتیاز {x.get('score',0)}" for x in rows]
+                        tg_send(msg['chat']['id'], '\n'.join(lines))
+                    else:
+                        tg_send(msg['chat']['id'], '📝 هنوز بسته محتوایی ثبت نشده است.')
+                results.append('private-control')
                 continue
         post = u.get('channel_post')
         if post:
