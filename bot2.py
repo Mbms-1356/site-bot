@@ -262,6 +262,7 @@ def build_menu():
     m.add(types.InlineKeyboardButton('🎯 چالش روز', callback_data='challenge'))
     m.add(types.InlineKeyboardButton('📊 پیشرفت من', callback_data='challenge_progress'))
     m.add(types.InlineKeyboardButton('📖 راهنمای استفاده', callback_data='guide'), types.InlineKeyboardButton('🤖 معرفی سیستم', callback_data='about'))
+    m.add(types.InlineKeyboardButton('🔊 راهنمای صوتی', callback_data='guide_audio'))
     m.add(types.InlineKeyboardButton('🎬 دانلود', callback_data='dl'), types.InlineKeyboardButton('📊 معامله', callback_data='tr'))
     m.add(types.InlineKeyboardButton('📈 گزارش', callback_data='rp'), types.InlineKeyboardButton('💬 بازخورد', callback_data='fb'))
     m.add(types.InlineKeyboardButton('🧠 آزمون', url=QUIZ), types.InlineKeyboardButton('📚 مقاله', url=ARTICLE))
@@ -308,6 +309,23 @@ def guide_text():
 
 def about_text():
     return f"🤖 <b>سیستم Forexin</b>\n\nاین ربات برای آموزش، مقاله، دانلود، قیمت‌ها، اخبار، سشن‌ها و چالش‌های آموزشی طراحی شده است. ربات سیگنال نیز برای اطلاع‌رسانی سریع بازار استفاده می‌شود.\n\n📢 پیام‌های خودکار سشن‌ها فقط یک‌بار در کانال فری منتشر می‌شوند.\n\n{CHANNEL}\n{MAINBOT}"
+
+FAQS = {
+    'faq_market': ('💰 قیمت‌ها و سیگنال', 'قیمت طلا و تتر برای اطلاع‌رسانی بازار هستند و تضمین یا توصیه خرید و فروش نیستند. قبل از هر معامله، تحلیل شخصی، حد ضرر و مقدار ریسک را مشخص کنید.'),
+    'faq_sessions': ('🕒 سشن‌های بازار', 'سشن‌های فرانکفورت، لندن و نیویورک زمان فعالیت بازار را نشان می‌دهند؛ بازشدن سشن به‌تنهایی سیگنال ورود نیست. خبر و ساختار قیمت را نیز بررسی کنید.'),
+    'faq_risk': ('🛡 مدیریت ریسک', 'در هر معامله مقدار ریسک را از قبل مشخص کنید، حد ضرر را حذف نکنید و پس از ضرر برای جبران عجله نکنید. حفظ سرمایه مقدم بر سود کوتاه‌مدت است.'),
+    'faq_news': ('📅 اخبار اقتصادی', 'اخبار مهم می‌توانند نوسان را افزایش دهند. پیش از معامله تقویم اقتصادی را بررسی کنید و نزدیک خبرهای پرقدرت حجم معامله را کاهش دهید یا صبر کنید.'),
+    'faq_challenge': ('🎯 چالش و امتیاز', 'چالش روز برای یادگیری و ساختن عادت آموزشی است. امتیاز و streak فقط معیار تمرین هستند، نه معیار تضمین سود یا مهارت قطعی در معامله.'),
+    'faq_lit': ('📚 آموزش LIT', 'برای یادگیری LIT از کانال آکادمی و محتوای آموزشی استفاده کنید. هر مفهوم را ابتدا روی داده گذشته تمرین و سپس با حساب آزمایشی ارزیابی کنید.'),
+    'faq_audio': ('🔊 پاسخ صوتی متداول', 'برای شنیدن پاسخ صوتی نکات مهم بازار، مدیریت ریسک، سشن‌ها، اخبار و چالش روز، دکمه زیر را بزنید.')
+}
+
+def faq_menu():
+    m = types.InlineKeyboardMarkup(row_width=2)
+    for key in ('faq_market', 'faq_sessions', 'faq_risk', 'faq_news', 'faq_challenge', 'faq_lit'):
+        m.add(types.InlineKeyboardButton(FAQS[key][0], callback_data=key))
+    m.add(types.InlineKeyboardButton('🔊 پاسخ صوتی متداول', callback_data='faq_audio'))
+    return m
 
 def tehran_now():
     return datetime.now(timezone(timedelta(hours=3, minutes=30)))
@@ -779,14 +797,15 @@ def cb(c):
         elif d == 'code':
             bot.send_message(chat, '🎟️ <b>کد VIP را وارد کنید:</b>')
         elif d == 'faq':
-            mk = types.InlineKeyboardMarkup(row_width=2)
-            mk.add(types.InlineKeyboardButton('لات', callback_data='gloss_lat'), types.InlineKeyboardButton('پیپ', callback_data='gloss_pip'))
-            mk.add(types.InlineKeyboardButton('استاپ', callback_data='gloss_stop'), types.InlineKeyboardButton('اهرم', callback_data='gloss_ahrom'))
-            mk.add(types.InlineKeyboardButton('اسپرد', callback_data='gloss_spread'), types.InlineKeyboardButton('تارگت', callback_data='gloss_target'))
-            mk.add(types.InlineKeyboardButton('سشن', callback_data='gloss_session'), types.InlineKeyboardButton('کندل', callback_data='gloss_candle'))
-            mk.add(types.InlineKeyboardButton('پترن', callback_data='gloss_pattern'), types.InlineKeyboardButton('LIT', callback_data='gloss_lit'))
-            mk.add(types.InlineKeyboardButton('VIP', callback_data='gloss_vip'))
-            bot.send_message(chat, '❓ <b>انتخاب کن:</b>', reply_markup=mk)
+            bot.send_message(chat, '❓ <b>مرکز سوالات متداول Forexin</b>\nموضوع موردنظر را انتخاب کنید. پاسخ‌ها آموزشی هستند و پاسخ صوتی هم در دسترس است.', reply_markup=faq_menu())
+        elif d in FAQS and d != 'faq_audio':
+            bot.send_message(chat, f"❓ <b>{FAQS[d][0]}</b>\n\n{FAQS[d][1]}", reply_markup=faq_menu())
+        elif d == 'faq_audio':
+            if os.path.exists('faq_fa.wav'):
+                with open('faq_fa.wav', 'rb') as audio:
+                    bot.send_audio(chat, audio, caption='🔊 پاسخ صوتی سوالات متداول Forexin')
+            else:
+                bot.send_message(chat, FAQS['faq_audio'][1], reply_markup=faq_menu())
         elif d.startswith('gloss_'):
             bot.send_message(chat, GLOSS.get(d[6:], '❓'))
         elif d == 'fb':
