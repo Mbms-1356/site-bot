@@ -17,7 +17,7 @@ if not TOKEN or ':' not in TOKEN:
 
 bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
 
-SITE = 'https://mbms-1356.github.io/forexin-site/'
+SITE = 'https://mbms-1356.github.io/forexin-site-/'
 CHANNEL = 'https://t.me/forexin_turkaslanifree'
 CHANNEL_POST = '@forexin_turkaslanifree'
 GROUP = 'https://t.me/forexinturkaslanilitcommuniti'
@@ -167,6 +167,37 @@ def get_prices():
 
     return f"📊 <b>قیمت‌های لحظه‌ای:</b>\n\n🥇 <b>انس طلا:</b> ${gold}\n🇮🇷 <b>تتر:</b> {usdt} تومان\n\n<i>🔄 آپدیت خودکار از صرافی‌های ایرانی</i>"
 
+def get_gold_only():
+    gold = 'نامشخص'
+    try:
+        d = fetch_json('https://api.gold-api.com/price/XAU')
+        gold = f"{d['price']}"
+    except Exception:
+        try:
+            d = fetch_json('https://data-asg.goldprice.org/dbXRates/USD')
+            gold = f"{round(d['items'][0]['xau_price'], 2)}"
+        except Exception:
+            pass
+    return f"🥇 <b>قیمت لحظه‌ای انس جهانی طلا:</b> ${gold}"
+
+def get_usdt_only():
+    usdt = 'نامشخص'
+    try:
+        d = fetch_json('https://api.tabdeal.org/api/v1/public/ticker?symbol=USDTIRT')
+        if d.get('status') == 'success':
+            usdt = f"{int(float(d['data']['last'])):,}"
+    except Exception:
+        try:
+            d = fetch_json('https://api.nobitex.ir/market/stats?srcCurrency=usdt&dstCurrency=rls')
+            usdt = f"{int(d['stats']['usdt-rls']['latest']) // 10:,}"
+        except Exception:
+            try:
+                d = fetch_json('https://api.wallex.ir/v1/markets/ticker?symbol=USDTIRT')
+                usdt = f"{int(float(d['data']['latest']['lastPrice'])):,}"
+            except Exception:
+                pass
+    return f"🇮🇷 <b>قیمت لحظه‌ای تتر:</b> {usdt} تومان"
+
 def news_today():
     try:
         d = fetch_json('https://nfs.faireconomy.media/ff_calendar_thisweek.json')
@@ -289,8 +320,10 @@ def cb(c):
             bot.send_message(chat, WELCOME_PRIV, reply_markup=build_menu())
         elif d == 'inv':
             bot.send_message(chat, f"🎁 <b>لینک‌های مفید:</b>\n🤖 ربات اصلی: {MAINBOT}\n💬 گروه: {GROUP}\n📢 کانال: {CHANNEL}")
-        elif d in ('gold', 'usdt'):
-            bot.send_message(chat, get_prices())
+        elif d == 'gold':
+            bot.send_message(chat, get_gold_only())
+        elif d == 'usdt':
+            bot.send_message(chat, get_usdt_only())
         elif d == 'dl':
             bot.send_message(chat, '🎬 <b>لینک ویدیو را بفرستید:</b>\n(یوتیوب، اینستاگرام، تیک‌تاک)')
         elif d == 'rules':
