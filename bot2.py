@@ -254,6 +254,7 @@ def build_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
     m.add(types.InlineKeyboardButton('🎟️ VIP', callback_data='code'), types.InlineKeyboardButton('❓ سوالات', callback_data='faq'))
     m.add(types.InlineKeyboardButton('💰 طلا', callback_data='gold'), types.InlineKeyboardButton('🇮🇷 تتر', callback_data='usdt'))
+    m.add(types.InlineKeyboardButton('📅 اخبار مهم امروز', callback_data='news'))
     m.add(types.InlineKeyboardButton('🎬 دانلود', callback_data='dl'), types.InlineKeyboardButton('📊 معامله', callback_data='tr'))
     m.add(types.InlineKeyboardButton('📈 گزارش', callback_data='rp'), types.InlineKeyboardButton('💬 بازخورد', callback_data='fb'))
     m.add(types.InlineKeyboardButton('🧠 آزمون', url=QUIZ), types.InlineKeyboardButton('📚 مقاله', url=ARTICLE))
@@ -266,6 +267,7 @@ def build_menu():
 def group_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
     m.add(types.InlineKeyboardButton('💰 طلا', callback_data='gold'), types.InlineKeyboardButton('🇮🇷 تتر', callback_data='usdt'))
+    m.add(types.InlineKeyboardButton('📅 اخبار مهم امروز', callback_data='news'))
     m.add(types.InlineKeyboardButton('🎬 دانلود', callback_data='dl'), types.InlineKeyboardButton('📜 قوانین', callback_data='rules'))
     m.add(types.InlineKeyboardButton('🧠 آزمون', url=QUIZ), types.InlineKeyboardButton('📚 مقاله', url=ARTICLE))
     m.add(types.InlineKeyboardButton('🎁 لینک‌ها', callback_data='inv'), types.InlineKeyboardButton('🎟️ لینک دعوت', callback_data='invite'))
@@ -631,6 +633,8 @@ def cb(c):
             bot.send_message(chat, get_gold_only())
         elif d == 'usdt':
             bot.send_message(chat, get_usdt_only())
+        elif d == 'news':
+            bot.send_message(chat, news_today() or '📅 امروز خبر پرقدرتی در تقویم اقتصادی پیدا نشد.')
         elif d == 'dl':
             bot.send_message(chat, '🎬 <b>لینک ویدیو را بفرستید:</b>\n(یوتیوب، اینستاگرام، تیک‌تاک)')
         elif d == 'rules':
