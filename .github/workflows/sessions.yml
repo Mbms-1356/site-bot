@@ -1,0 +1,27 @@
+name: sessions
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: sessions-publisher-single
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TOKEN_SIGNALS }}
+      GH_PAT: ${{ secrets.GH_PAT }}
+      GH_REPO: Mbms-1356/site-bot
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: pip install requests
+      - name: Publish due session event
+        run: python3 session_publisher.py

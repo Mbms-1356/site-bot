@@ -1,5 +1,6 @@
 import os, json, threading, time as _t, re, urllib.request, ssl
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import telebot
 from telebot import types
 import yt_dlp
@@ -114,6 +115,7 @@ def build_menu():
     m.add(types.InlineKeyboardButton(MENU[0], callback_data='code'), types.InlineKeyboardButton(MENU[1], callback_data='faq'))
     m.add(types.InlineKeyboardButton(MENU[2], callback_data='gold'), types.InlineKeyboardButton(MENU[3], callback_data='usdt'))
     m.add(types.InlineKeyboardButton('📅 اخبار مهم امروز', callback_data='news'))
+    m.add(types.InlineKeyboardButton('🕒 وضعیت سشن‌ها', callback_data='sessions'))
     m.add(types.InlineKeyboardButton(MENU[4], callback_data='dl'), types.InlineKeyboardButton(MENU[5], callback_data='tr'))
     m.add(types.InlineKeyboardButton(MENU[6], callback_data='rp'), types.InlineKeyboardButton(MENU[7], callback_data='fb'))
     m.add(types.InlineKeyboardButton(MENU[8], url=QUIZ), types.InlineKeyboardButton(MENU[9], url=SITE))
@@ -126,6 +128,7 @@ def group_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
     m.add(types.InlineKeyboardButton('💰 طلا', callback_data='gold'), types.InlineKeyboardButton('🇮🇷 تتر', callback_data='usdt'))
     m.add(types.InlineKeyboardButton('📅 اخبار مهم امروز', callback_data='news'))
+    m.add(types.InlineKeyboardButton('🕒 وضعیت سشن‌ها', callback_data='sessions'))
     m.add(types.InlineKeyboardButton('📜 قوانین', callback_data='rules'), types.InlineKeyboardButton('🧠 آزمون', url=QUIZ))
     m.add(types.InlineKeyboardButton('🎁 لینک‌ها', callback_data='inv'), types.InlineKeyboardButton('🚀 شروع', callback_data='st'))
     return m
@@ -140,6 +143,38 @@ def fetch_json(url):
 
 def tehran_now():
     return datetime.now(timezone(timedelta(hours=3, minutes=30)))
+
+SESSION_EVENTS = [
+    ('frankfurt_open', '🇩🇪 بازشدن فرانکفورت', 'Europe/Berlin', 8, 0),
+    ('london_open', '🇬🇧 بازشدن لندن', 'Europe/London', 8, 0),
+    ('newyork_open', '🇺🇸 بازشدن نیویورک و شروع هم‌پوشانی لندن–نیویورک', 'America/New_York', 8, 0),
+    ('london_close', '🇬🇧 بسته‌شدن لندن', 'Europe/London', 17, 0),
+]
+
+def sessions_status():
+    now = tehran_now()
+    active = []
+    for name, zone, start, end in [
+        ('آسیا', 'Asia/Tokyo', 0, 9),
+        ('فرانکفورت', 'Europe/Berlin', 8, 16),
+        ('لندن', 'Europe/London', 8, 17),
+        ('نیویورک', 'America/New_York', 8, 17),
+    ]:
+        local = now.astimezone(ZoneInfo(zone))
+        if start <= local.hour + local.minute / 60 < end:
+            active.append(name)
+    upcoming = []
+    for delta in range(0, 3):
+        date = (now + timedelta(days=delta)).date()
+        for key, label, zone, hour, minute in SESSION_EVENTS:
+            local_dt = datetime(date.year, date.month, date.day, hour, minute, tzinfo=ZoneInfo(zone))
+            tehran_dt = local_dt.astimezone(now.tzinfo)
+            if tehran_dt >= now:
+                upcoming.append((tehran_dt, label))
+    upcoming.sort(key=lambda x: x[0])
+    next_line = '⏳ رویداد بعدی: ' + upcoming[0][1] + '، ساعت ' + upcoming[0][0].strftime('%H:%M') if upcoming else '⏳ رویداد بعدی نامشخص است.'
+    active_line = '، '.join(active) if active else 'هیچ سشن اصلی در این لحظه فعال نیست.'
+    return '🕒 <b>وضعیت سشن‌های بازار</b>\n\n✅ سشن فعال: ' + active_line + '\n' + next_line + '\n\n⚠️ زمان‌ها به وقت ایران هستند؛ این بخش اطلاع‌رسانی آموزشی است و سیگنال خرید یا فروش نیست.'
 
 def get_prices():
     gold = 'نامشخص'
@@ -341,6 +376,8 @@ def cb(c):
             bot.send_message(chat, get_usdt_only())
         elif d == 'news':
             bot.send_message(chat, news_today() or '📅 امروز خبر پرقدرتی در تقویم اقتصادی پیدا نشد.')
+        elif d == 'sessions':
+            bot.send_message(chat, sessions_status())
         elif d == 'dl':
             bot.send_message(chat, '🎬 <b>لینک ویدیو را بفرستید:</b>\n(یوتیوب، اینستاگرام، تیک‌تاک)')
         elif d == 'rules':
