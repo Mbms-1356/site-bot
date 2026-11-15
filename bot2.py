@@ -313,7 +313,13 @@ def get_usdt_only():
 
 def news_today():
     try:
-        d = fetch_json('https://nfs.faireconomy.media/ff_calendar_thisweek.json')
+        r = requests.get(
+            'https://nfs.faireconomy.media/ff_calendar_thisweek.json',
+            headers={'User-Agent': 'Mozilla/5.0'},
+            timeout=15,
+        )
+        r.raise_for_status()
+        d = r.json()
         now = tehran_now()
         lines = []
         for ev in d:
@@ -328,8 +334,9 @@ def news_today():
             if len(lines) >= 8: break
         if lines:
             return "📅 <b>تقویم امروز:</b>\n\n" + "\n\n".join(lines)
-    except Exception: pass
-    return None
+    except Exception:
+        return '⚠️ منبع تقویم اقتصادی موقتاً در دسترس نیست؛ لطفاً چند دقیقه بعد دوباره امتحان کنید.'
+    return '📅 امروز خبر پرقدرتی در تقویم اقتصادی وجود ندارد.'
 
 def tiktok_full(u):
     q = urllib.parse.quote(u, safe='')
