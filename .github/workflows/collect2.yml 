@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_PAT: ${{ secrets.GH_PAT }}
-      TOKEN: "8672154032:AAEgSGwR7uXGZsdpxNJvgsXswJ4aHoAYzhE"
+      TOKEN: ${{ secrets.TOKEN_AGENT }}
     steps:
       - name: tanker2
         run: |
