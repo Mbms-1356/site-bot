@@ -1,10 +1,10 @@
 import base64, html, io, json, os, re, subprocess, tempfile, time, urllib.parse, urllib.request
 from pathlib import Path
 
-TOKEN = os.environ['TOKEN_AGENT']
-PAT = os.environ.get('GH_PAT', '')
-GROQ = os.environ.get('GROQ_KEY', '')
-OPENROUTER = os.environ.get('OPENROUTER_KEY', '')
+TOKEN = os.environ.get('TOKEN_AGENT', '').strip()
+PAT = os.environ.get('GH_PAT', '').strip()
+GROQ = os.environ.get('GROQ_KEY', '').strip()
+OPENROUTER = os.environ.get('OPENROUTER_KEY', '').strip()
 SITE_REPO = 'Mbms-1356/forexin-site-'
 SELF_REPO = os.environ.get('GITHUB_REPOSITORY', 'Mbms-1356/site-bot')
 BASE_NAMES = {'forexin_turkaslani_base', 'forexinturkaslanibase'}
