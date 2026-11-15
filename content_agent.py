@@ -22,6 +22,10 @@ def tg(method, params=None):
     return json.loads(http(API + '/' + method + q, headers={'User-Agent': 'ForexinContentAgent'}))
 
 
+def tg_send(chat_id, text):
+    return tg('sendMessage', {'chat_id': chat_id, 'text': text})
+
+
 def gh_json(path, repo=SITE_REPO):
     try:
         raw = http('https://api.github.com/repos/' + repo + '/contents/' + path,
@@ -172,6 +176,17 @@ def main():
     results = []
     for u in updates:
         st['offset'] = max(int(st.get('offset', 0)), int(u.get('update_id', 0)))
+        msg = u.get('message') or {}
+        if msg and msg.get('chat', {}).get('type') == 'private':
+            text = (msg.get('text') or '').strip().lower()
+            if text in ('/start', '/help'):
+                tg_send(msg['chat']['id'], '🦁 کارخانه محتوای Forexin فعال است.\n\n✅ پست‌های جدید کانال Base را دریافت می‌کنم.\n🎬 ویدئو و صوت را به متن تبدیل می‌کنم.\n📰 مقاله آموزشی و سئوشده می‌سازم.\n🔊 نسخه صوتی پادکست را آماده می‌کنم.\n\n⚠️ این ربات برای پردازش خودکار محتوای کانال Base است؛ محتوای جدید را در همان کانال منتشر کنید.')
+                results.append('private-start')
+                continue
+            if text == '/status':
+                tg_send(msg['chat']['id'], '✅ کارخانه محتوا فعال است و هر ۱۰ دقیقه کانال Base را بررسی می‌کند.')
+                results.append('private-status')
+                continue
         post = u.get('channel_post')
         if post:
             key = str(u['update_id'])
