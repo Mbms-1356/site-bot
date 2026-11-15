@@ -1,4 +1,4 @@
-import base64, cgi, html, io, json, os, re, subprocess, tempfile, time, urllib.parse, urllib.request
+import base64, html, io, json, os, re, subprocess, tempfile, time, urllib.parse, urllib.request
 from pathlib import Path
 
 TOKEN = os.environ['TOKEN_AGENT']
