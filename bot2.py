@@ -6,6 +6,7 @@ from telebot import types
 import yt_dlp
 import requests
 from challenge_engine import get_daily, answer as answer_challenge, profile as challenge_profile, report as challenge_report
+from assistant_engine import answer_question
 
 TOKEN = (os.environ.get('TELEGRAM_SITE_BOT_TOKEN', '').strip()
          or os.environ.get('TOKEN_SITE', '').strip()
@@ -64,6 +65,7 @@ def fetch_text(url, referer=None, timeout=10):
     return urllib.request.urlopen(req, timeout=timeout, context=ctx).read().decode('utf-8', 'ignore')
 
 _dirty = False
+ASSISTANT_USERS = set()
 def mark_dirty():
     global _dirty
     _dirty = True
@@ -261,6 +263,7 @@ def build_menu():
     m.add(types.InlineKeyboardButton('🕒 وضعیت سشن‌ها', callback_data='sessions'))
     m.add(types.InlineKeyboardButton('🎯 چالش روز', callback_data='challenge'))
     m.add(types.InlineKeyboardButton('📊 پیشرفت من', callback_data='challenge_progress'))
+    m.add(types.InlineKeyboardButton('🤖 دستیار آموزشی', callback_data='assistant'))
     m.add(types.InlineKeyboardButton('📖 راهنمای استفاده', callback_data='guide'), types.InlineKeyboardButton('🤖 معرفی سیستم', callback_data='about'))
     m.add(types.InlineKeyboardButton('🔊 راهنمای صوتی', callback_data='guide_audio'))
     m.add(types.InlineKeyboardButton('🎬 دانلود', callback_data='dl'), types.InlineKeyboardButton('📊 معامله', callback_data='tr'))
@@ -756,6 +759,9 @@ def cb(c):
                 bot.send_message(chat, '🔊 راهنمای صوتی در حال آماده‌سازی است.')
         elif d == 'about':
             bot.send_message(chat, about_text())
+        elif d == 'assistant':
+            ASSISTANT_USERS.add(uid)
+            bot.send_message(chat, '🤖 <b>دستیار آموزشی Forexin</b>\n\nسؤال خود را درباره LIT، نقدینگی، POI، Imbalance، مدیریت ریسک، سشن‌ها یا ژورنال بنویسید.\n\nپاسخ‌ها آموزشی‌اند و سیگنال قطعی خرید یا فروش نیستند. برای خروج از حالت سؤال، /cancel را بفرستید.')
         elif d == 'inv':
             bot.send_message(chat, f"🎁 <b>لینک‌های مفید:</b>\n🤖 {MAINBOT}\n📢 @forexin_turkaslanifree\n🎓 @Forexin_Turkaslani_Base\n💬 @forexinturkaslanilitcommuniti")
         elif d == 'gold':
@@ -874,6 +880,24 @@ def txt(m):
     t = m.text.strip()
     is_grp = m.chat.type in ('group', 'supergroup')
     if is_grp: save_group(m.chat.id)
+
+    if not is_grp and uid in ASSISTANT_USERS:
+        if t == '/cancel':
+            ASSISTANT_USERS.discard(uid)
+            bot.send_message(m.chat.id, '✅ از حالت دستیار خارج شدید.', reply_markup=build_menu())
+            return
+        if not is_free_member(uid) and not ensure_admin(uid):
+            send_join_gate(m.chat.id)
+            return
+        result = answer_question(t)
+        if result.get('matched'):
+            mk = types.InlineKeyboardMarkup(row_width=1)
+            if result.get('url'):
+                mk.add(types.InlineKeyboardButton('📚 مطالعه مقاله مرتبط', url=result['url']))
+            bot.send_message(m.chat.id, f"🤖 <b>پاسخ آموزشی</b>\n🏷 موضوع: {result['category']} | سطح: {result['difficulty']}\n\n{result['answer']}\n\n🛡 <b>نکته:</b> {result['tip']}\n\n⚠️ این پاسخ آموزشی است، نه توصیه معاملاتی.", reply_markup=mk)
+        else:
+            bot.send_message(m.chat.id, '🤖 ' + result['text'])
+        return
 
     if is_grp and is_link(t) and not ensure_admin(uid):
         try: bot.delete_message(m.chat.id, m.message_id)
