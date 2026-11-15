@@ -1,7 +1,7 @@
 import base64, html, io, json, os, re, subprocess, tempfile, time, urllib.parse, urllib.request
 from pathlib import Path
 
-TOKEN = os.environ.get('TOKEN_AGENT', '').strip()
+TOKEN = os.environ.get('TOKEN_CONTENT_AGENT', '').strip()
 PAT = os.environ.get('GH_PAT', '').strip()
 GROQ = os.environ.get('GROQ_KEY', '').strip()
 OPENROUTER = os.environ.get('OPENROUTER_KEY', '').strip()

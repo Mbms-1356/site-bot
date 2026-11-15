@@ -9,7 +9,7 @@ jobs:
   publish-content:
     runs-on: ubuntu-latest
     env:
-      TOKEN_AGENT: ${{ secrets.TOKEN_AGENT }}
+      TOKEN_CONTENT_AGENT: ${{ secrets.TOKEN_CONTENT_AGENT }}
       GH_PAT: ${{ secrets.GH_PAT }}
       GROQ_KEY: ${{ secrets.GROQ_KEY }}
       OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
