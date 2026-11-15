@@ -5,7 +5,9 @@ from telebot import types
 import yt_dlp
 import requests
 
-TOKEN = os.environ.get('TOKEN_SITE', '').strip() or os.environ.get('TELEGRAM_BOT_TOKEN', '').strip()
+TOKEN = (os.environ.get('TELEGRAM_SITE_BOT_TOKEN', '').strip()
+         or os.environ.get('TOKEN_SITE', '').strip()
+         or os.environ.get('TELEGRAM_BOT_TOKEN', '').strip())
 if not TOKEN:
     try:
         with open(os.path.join(os.path.expanduser('~'), 'token.txt')) as f:

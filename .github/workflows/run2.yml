@@ -10,7 +10,7 @@ jobs:
   run:
     runs-on: ubuntu-latest
     env:
-      TOKEN_SITE: ${{ secrets.TOKEN_SITE }}
+      TELEGRAM_SITE_BOT_TOKEN: ${{ secrets.TELEGRAM_SITE_BOT_TOKEN }}
       GH_TOKEN: ${{ secrets.GH_PAT }}
       GH_REPO: Mbms-1356/site-bot
     steps:
