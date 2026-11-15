@@ -5,7 +5,7 @@ import telebot
 from telebot import types
 import yt_dlp
 import requests
-from challenge_engine import get_daily, answer as answer_challenge
+from challenge_engine import get_daily, answer as answer_challenge, profile as challenge_profile, report as challenge_report
 
 TOKEN = (os.environ.get('TELEGRAM_SITE_BOT_TOKEN', '').strip()
          or os.environ.get('TOKEN_SITE', '').strip()
@@ -259,6 +259,7 @@ def build_menu():
     m.add(types.InlineKeyboardButton('📅 اخبار مهم امروز', callback_data='news'))
     m.add(types.InlineKeyboardButton('🕒 وضعیت سشن‌ها', callback_data='sessions'))
     m.add(types.InlineKeyboardButton('🎯 چالش روز', callback_data='challenge'))
+    m.add(types.InlineKeyboardButton('📊 پیشرفت من', callback_data='challenge_progress'))
     m.add(types.InlineKeyboardButton('🎬 دانلود', callback_data='dl'), types.InlineKeyboardButton('📊 معامله', callback_data='tr'))
     m.add(types.InlineKeyboardButton('📈 گزارش', callback_data='rp'), types.InlineKeyboardButton('💬 بازخورد', callback_data='fb'))
     m.add(types.InlineKeyboardButton('🧠 آزمون', url=QUIZ), types.InlineKeyboardButton('📚 مقاله', url=ARTICLE))
@@ -274,6 +275,7 @@ def group_menu():
     m.add(types.InlineKeyboardButton('📅 اخبار مهم امروز', callback_data='news'))
     m.add(types.InlineKeyboardButton('🕒 وضعیت سشن‌ها', callback_data='sessions'))
     m.add(types.InlineKeyboardButton('🎯 چالش روز', callback_data='challenge'))
+    m.add(types.InlineKeyboardButton('📊 پیشرفت من', callback_data='challenge_progress'))
     m.add(types.InlineKeyboardButton('🎬 دانلود', callback_data='dl'), types.InlineKeyboardButton('📜 قوانین', callback_data='rules'))
     m.add(types.InlineKeyboardButton('🧠 آزمون', url=QUIZ), types.InlineKeyboardButton('📚 مقاله', url=ARTICLE))
     m.add(types.InlineKeyboardButton('🎁 لینک‌ها', callback_data='inv'), types.InlineKeyboardButton('🎟️ لینک دعوت', callback_data='invite'))
@@ -635,6 +637,15 @@ def new_member(m):
                 msg = bot.send_message(m.chat.id, f'🛡️ <b>{u.first_name or "کاربر"}</b> عزیز، خوش آمدید!\nبرای تأیید، تا ۲ دقیقه دکمهٔ زیر را بزنید:', reply_markup=mk)
                 CAPTCHA[u.id] = {'chat': m.chat.id, 'exp': _t.time() + 120, 'msg': msg.message_id, 'name': u.first_name or 'دوست'}
 
+@bot.message_handler(commands=['challenge_report'])
+def challenge_report_cmd(m):
+    if not is_admin(m.from_user.id):
+        return
+    r = challenge_report()
+    weak = '، '.join(f'{name} ({data["accuracy"]}٪)' for name, data in r['weakest']) or 'هنوز داده کافی نیست'
+    top = '\n'.join(f"{i+1}. کاربر ...{row['uid'][-4:]} — {row['points']} امتیاز" for i, row in enumerate(r['leaderboard'])) or 'هنوز داده‌ای ثبت نشده'
+    bot.send_message(m.chat.id, f"📈 <b>گزارش چالش‌ها</b>\n\n👥 کاربران فعال: {r['users']}\n📝 پاسخ‌ها: {r['answers']}\n✅ دقت کلی: {r['accuracy']}٪\n📚 موضوعات نیازمند تقویت: {weak}\n\n🏆 <b>رتبه‌بندی آموزشی:</b>\n{top}")
+
 @bot.message_handler(commands=['start'])
 def start(m):
     uid = m.from_user.id
@@ -706,6 +717,12 @@ def cb(c):
                 user = result['user']
                 badges = '، '.join(user.get('badges', [])) or 'هنوز نشان جدیدی ندارید'
                 bot.send_message(chat, f"{prefix}\n\n<b>پاسخ صحیح:</b> {q['options'][q['correct']]}\n{q['explanation']}\n\n🛡 <b>نکته:</b> {q['tip']}\n\n🏆 امتیاز: {user.get('points', 0)}\n🔥 روزهای متوالی: {user.get('streak', 0)}\n🏅 نشان‌ها: {badges}")
+        elif d == 'challenge_progress':
+            user = challenge_profile(uid)
+            answered = sum(1 for item in user.get('history', {}).values() if item.get('answered'))
+            correct = sum(1 for item in user.get('history', {}).values() if item.get('correct'))
+            badges = '، '.join(user.get('badges', [])) or 'هنوز نشان جدیدی ندارید'
+            bot.send_message(chat, f"📊 <b>پیشرفت آموزشی شما</b>\n\n🏆 امتیاز: {user.get('points', 0)}\n📝 چالش‌های پاسخ‌داده‌شده: {answered}\n✅ پاسخ‌های صحیح: {correct}\n🔥 روزهای متوالی: {user.get('streak', 0)}\n🏅 نشان‌ها: {badges}")
         elif d == 'dl':
             bot.send_message(chat, '🎬 <b>لینک ویدیو را بفرستید:</b>\n(یوتیوب، اینستاگرام، تیک‌تاک)')
         elif d == 'rules':

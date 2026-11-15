@@ -106,3 +106,31 @@ def answer(uid, qid, option):
 def profile(uid):
     state = _state()
     return _user(state, uid)
+
+
+def report(limit=10):
+    state = _state()
+    questions = {q['id']: q for q in _load(CONTENT_PATH, [])}
+    users = state.get('users', {})
+    rows = []
+    category = {}
+    total_answers = 0
+    total_correct = 0
+    for uid, user in users.items():
+        correct = sum(1 for item in user.get('history', {}).values() if item.get('answered') and item.get('correct'))
+        answered = sum(1 for item in user.get('history', {}).values() if item.get('answered'))
+        rows.append({'uid': uid, 'points': user.get('points', 0), 'streak': user.get('streak', 0), 'answered': answered, 'correct': correct})
+        total_answers += answered
+        total_correct += correct
+        for item in user.get('history', {}).values():
+            q = questions.get(item.get('id'))
+            if not q or not item.get('answered'):
+                continue
+            bucket = category.setdefault(q['category'], {'answers': 0, 'correct': 0})
+            bucket['answers'] += 1
+            bucket['correct'] += int(bool(item.get('correct')))
+    rows.sort(key=lambda x: (x['points'], x['streak'], x['correct']), reverse=True)
+    for name, data in category.items():
+        data['accuracy'] = round(data['correct'] / data['answers'] * 100) if data['answers'] else 0
+    weakest = sorted(category.items(), key=lambda pair: (pair[1]['accuracy'], -pair[1]['answers']))
+    return {'users': len(users), 'answers': total_answers, 'correct': total_correct, 'accuracy': round(total_correct / total_answers * 100) if total_answers else 0, 'leaderboard': rows[:limit], 'categories': category, 'weakest': weakest[:3]}
