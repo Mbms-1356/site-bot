@@ -13,6 +13,8 @@ jobs:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TOKEN_SIGNALS }}
       GH_TOKEN: ${{ secrets.GH_PAT }}
       GH_REPO: Mbms-1356/site-bot
+      CHALLENGE_NAMESPACE: signals
+      CHALLENGE_STATE_FILE: challenge_state_signals.json
     steps:
       - uses: actions/checkout@v4
       - name: deps

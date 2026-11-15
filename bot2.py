@@ -5,6 +5,7 @@ import telebot
 from telebot import types
 import yt_dlp
 import requests
+from challenge_engine import get_daily, answer as answer_challenge
 
 TOKEN = (os.environ.get('TELEGRAM_SITE_BOT_TOKEN', '').strip()
          or os.environ.get('TOKEN_SITE', '').strip()
@@ -257,6 +258,7 @@ def build_menu():
     m.add(types.InlineKeyboardButton('💰 طلا', callback_data='gold'), types.InlineKeyboardButton('🇮🇷 تتر', callback_data='usdt'))
     m.add(types.InlineKeyboardButton('📅 اخبار مهم امروز', callback_data='news'))
     m.add(types.InlineKeyboardButton('🕒 وضعیت سشن‌ها', callback_data='sessions'))
+    m.add(types.InlineKeyboardButton('🎯 چالش روز', callback_data='challenge'))
     m.add(types.InlineKeyboardButton('🎬 دانلود', callback_data='dl'), types.InlineKeyboardButton('📊 معامله', callback_data='tr'))
     m.add(types.InlineKeyboardButton('📈 گزارش', callback_data='rp'), types.InlineKeyboardButton('💬 بازخورد', callback_data='fb'))
     m.add(types.InlineKeyboardButton('🧠 آزمون', url=QUIZ), types.InlineKeyboardButton('📚 مقاله', url=ARTICLE))
@@ -271,6 +273,7 @@ def group_menu():
     m.add(types.InlineKeyboardButton('💰 طلا', callback_data='gold'), types.InlineKeyboardButton('🇮🇷 تتر', callback_data='usdt'))
     m.add(types.InlineKeyboardButton('📅 اخبار مهم امروز', callback_data='news'))
     m.add(types.InlineKeyboardButton('🕒 وضعیت سشن‌ها', callback_data='sessions'))
+    m.add(types.InlineKeyboardButton('🎯 چالش روز', callback_data='challenge'))
     m.add(types.InlineKeyboardButton('🎬 دانلود', callback_data='dl'), types.InlineKeyboardButton('📜 قوانین', callback_data='rules'))
     m.add(types.InlineKeyboardButton('🧠 آزمون', url=QUIZ), types.InlineKeyboardButton('📚 مقاله', url=ARTICLE))
     m.add(types.InlineKeyboardButton('🎁 لینک‌ها', callback_data='inv'), types.InlineKeyboardButton('🎟️ لینک دعوت', callback_data='invite'))
@@ -311,6 +314,12 @@ def sessions_status():
     next_line = '⏳ رویداد بعدی: ' + upcoming[0][1] + '، ساعت ' + upcoming[0][0].strftime('%H:%M') if upcoming else '⏳ رویداد بعدی نامشخص است.'
     active_line = '، '.join(active) if active else 'هیچ سشن اصلی در این لحظه فعال نیست.'
     return '🕒 <b>وضعیت سشن‌های بازار</b>\n\n✅ سشن فعال: ' + active_line + '\n' + next_line + '\n\n⚠️ زمان‌ها به وقت ایران هستند؛ این بخش اطلاع‌رسانی آموزشی است و سیگنال خرید یا فروش نیست.'
+
+def challenge_prompt(q):
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    for i, option in enumerate(q['options']):
+        markup.add(types.InlineKeyboardButton(option, callback_data=f"challenge_answer:{q['id']}:{i}"))
+    return f"🎯 <b>چالش روز | {q['category']}</b>\nسطح: {q['difficulty']}\n\n{q['question']}", markup
 
 def clean(x):
     s = str(x)
@@ -679,6 +688,24 @@ def cb(c):
             bot.send_message(chat, news_today() or '📅 امروز خبر پرقدرتی در تقویم اقتصادی پیدا نشد.')
         elif d == 'sessions':
             bot.send_message(chat, sessions_status())
+        elif d == 'challenge':
+            q = get_daily(uid)
+            if q:
+                text, markup = challenge_prompt(q)
+                bot.send_message(chat, text, reply_markup=markup)
+            else:
+                bot.send_message(chat, '🎯 فعلاً چالش جدیدی آماده نیست.')
+        elif d.startswith('challenge_answer:'):
+            _, qid, option = d.split(':', 2)
+            result = answer_challenge(uid, qid, option)
+            if not result:
+                bot.send_message(chat, '⚠️ این چالش دیگر در دسترس نیست.')
+            else:
+                q = result['question']
+                prefix = 'ℹ️ شما چالش امروز را قبلاً پاسخ داده‌اید.' if result['already'] else ('✅ پاسخ درست بود!' if result['correct'] else '❌ پاسخ درست نبود؛ نکته آموزشی را ببینید.')
+                user = result['user']
+                badges = '، '.join(user.get('badges', [])) or 'هنوز نشان جدیدی ندارید'
+                bot.send_message(chat, f"{prefix}\n\n<b>پاسخ صحیح:</b> {q['options'][q['correct']]}\n{q['explanation']}\n\n🛡 <b>نکته:</b> {q['tip']}\n\n🏆 امتیاز: {user.get('points', 0)}\n🔥 روزهای متوالی: {user.get('streak', 0)}\n🏅 نشان‌ها: {badges}")
         elif d == 'dl':
             bot.send_message(chat, '🎬 <b>لینک ویدیو را بفرستید:</b>\n(یوتیوب، اینستاگرام، تیک‌تاک)')
         elif d == 'rules':
