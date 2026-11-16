@@ -1,4 +1,5 @@
 import base64, html, io, json, os, re, subprocess, tempfile, time, urllib.parse, urllib.request
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from content_package import make_package, score_package
 from content_control import load_index, save_package, summary
@@ -130,6 +131,32 @@ def build_calendar(index):
         idea = ideas[i % len(ideas)]
         entries.append({'day': day, 'format': formats[i], 'title': idea['title'], 'status': 'planned'})
     return {'generated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'entries': entries}
+
+
+def live_research(index):
+    """Read public Google News RSS results; never auto-publishes or copies articles."""
+    local = build_research(index)
+    topics = [x.get('source_topic', '') for x in local['ideas'][:3]]
+    queries = ['فارکس مدیریت ریسک آموزش'] + [x for x in topics if x]
+    items = []
+    seen = set()
+    for query in queries[:4]:
+        url = 'https://news.google.com/rss/search?q=' + urllib.parse.quote(query) + '&hl=fa&gl=IR&ceid=IR:fa'
+        try:
+            root = ET.fromstring(http(url, timeout=20))
+        except Exception:
+            continue
+        for item in root.findall('./channel/item')[:5]:
+            link = (item.findtext('link') or '').strip()
+            title = (item.findtext('title') or '').strip()
+            if not link or not title or link in seen:
+                continue
+            seen.add(link)
+            items.append({'query': query, 'title': title, 'source_url': link,
+                          'published_at': (item.findtext('pubDate') or '').strip(),
+                          'use': 'تحقیق و ایده‌پردازی؛ قبل از انتشار راستی‌آزمایی شود'})
+    return {'generated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            'queries': queries, 'items': items[:15], 'internal_ideas': local['ideas']}
 
 
 def file_bytes(file_id):
@@ -313,11 +340,13 @@ def main():
             elif data in ('research', 'calendar'):
                 index = load_index(lambda path: gh_text(path, SITE_REPO))
                 if data == 'research':
-                    report = build_research(index)
-                    put_json('content-control/research.json', report, 'Update content research ideas', SITE_REPO)
-                    lines = ['🔎 ایده‌های تحقیق و تولید محتوا:']
-                    lines.extend(f"{i + 1}. {x['title']}\n   قالب: {x['format']}" for i, x in enumerate(report['ideas']))
-                    lines.append('\n⚠️ همه ایده‌ها آموزشی هستند و سیگنال یا تضمین سود نیستند.')
+                    report = live_research(index)
+                    put_json('content-control/research.json', report, 'Update live content research', SITE_REPO)
+                    lines = ['🔎 تحقیق زنده و ایده‌های تولید محتوا:']
+                    lines.extend(f"{i + 1}. {x['title']}\n   منبع: {x['source_url']}" for i, x in enumerate(report['items'][:5]))
+                    if not report['items']:
+                        lines.append('فعلاً منبع عمومی جدیدی دریافت نشد؛ ایده‌های داخلی همچنان در فایل تحقیق ذخیره شده‌اند.')
+                    lines.append('\n⚠️ منابع فقط برای تحقیق هستند؛ قبل از انتشار باید بررسی و بازنویسی شوند و سیگنال یا تضمین سود نیستند.')
                     tg_send(chat_id, '\n'.join(lines), CONTROL_MENU)
                 else:
                     calendar = build_calendar(index)
