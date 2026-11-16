@@ -46,7 +46,8 @@ CONTROL_MENU = {'inline_keyboard': [
     [{'text': '📦 بسته کامل محتوا', 'callback_data': 'intake'}, {'text': '📄 PDF / Word / متن', 'callback_data': 'document'}],
     [{'text': '🎙 صوت / ویدئو', 'callback_data': 'media'}, {'text': '🖼 عکس و کاور', 'callback_data': 'image'}],
     [{'text': '📝 پیش‌نویس‌ها', 'callback_data': 'drafts'}, {'text': '📊 گزارش مرکز کنترل', 'callback_data': 'control'}],
-    [{'text': '🔎 ایده و تحقیق', 'callback_data': 'research'}, {'text': '📅 تقویم محتوا', 'callback_data': 'calendar'}],
+    [{'text': '🔎 ایده و تحقیق', 'callback_data': 'research'}, {'text': '👥 تحلیل رقبا', 'callback_data': 'competitors'}],
+    [{'text': '📅 تقویم محتوا', 'callback_data': 'calendar'}, {'text': '📚 راهنمای تحقیق', 'callback_data': 'research-help'}],
     [{'text': '🚀 شروع /start', 'callback_data': 'main'}, {'text': '🔄 وضعیت /status', 'callback_data': 'status'}],
     [{'text': '📊 کنترل /control', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس /drafts', 'callback_data': 'drafts'}],
     [{'text': 'ℹ️ راهنمای کامل', 'callback_data': 'help'}, {'text': '🔙 منوی اصلی', 'callback_data': 'main'}],
@@ -157,6 +158,30 @@ def live_research(index):
                           'use': 'تحقیق و ایده‌پردازی؛ قبل از انتشار راستی‌آزمایی شود'})
     return {'generated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
             'queries': queries, 'items': items[:15], 'internal_ideas': local['ideas']}
+
+
+def competitor_report(config):
+    competitors = config.get('competitors', []) if isinstance(config, dict) else []
+    report = {'generated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'competitors': [], 'note': 'منابع عمومی برای تحقیق؛ قبل از انتشار راستی‌آزمایی شود.'}
+    for competitor in competitors[:10]:
+        name = str(competitor.get('name') or '').strip()
+        query = str(competitor.get('query') or name).strip()
+        if not name or not query:
+            continue
+        articles = []
+        url = 'https://news.google.com/rss/search?q=' + urllib.parse.quote(query) + '&hl=fa&gl=IR&ceid=IR:fa'
+        try:
+            root = ET.fromstring(http(url, timeout=20))
+            for item in root.findall('./channel/item')[:5]:
+                title = (item.findtext('title') or '').strip()
+                link = (item.findtext('link') or '').strip()
+                if title and link:
+                    articles.append({'title': title, 'source_url': link, 'published_at': (item.findtext('pubDate') or '').strip()})
+        except Exception:
+            pass
+        report['competitors'].append({'name': name, 'platform': competitor.get('platform', 'public-web'), 'query': query, 'items': articles,
+                                      'content_gap_prompt': f'چه زاویه آموزشی متفاوتی برای موضوعات «{name}» می‌توان تولید کرد؟'})
+    return report
 
 
 def file_bytes(file_id):
@@ -354,6 +379,24 @@ def main():
                     lines = ['📅 تقویم محتوایی هفتگی:']
                     lines.extend(f"• {x['day']}: {x['format']}\n  {x['title']}" for x in calendar['entries'])
                     tg_send(chat_id, '\n'.join(lines), CONTROL_MENU)
+            elif data == 'competitors':
+                config = {}
+                raw = gh_text('competitors.json', SELF_REPO)
+                try:
+                    config = json.loads(raw) if raw else {}
+                except Exception:
+                    config = {}
+                report = competitor_report(config)
+                put_json('content-control/competitors-report.json', report, 'Update competitor research report', SITE_REPO)
+                if not report['competitors']:
+                    tg_send(chat_id, '👥 تحلیل رقبا آماده است، اما هنوز فهرست رقیب تنظیم نشده است.\n\nلطفاً ۳ تا ۵ نام، لینک کانال، صفحه یا سایت رقیب را در فایل competitors.json وارد کنید؛ سپس این دکمه گزارش منابع عمومی و شکاف‌های محتوایی را می‌سازد.', CONTROL_MENU)
+                else:
+                    lines = ['👥 گزارش تحلیل رقبا:']
+                    lines.extend(f"• {x['name']} ({x['platform']}): {len(x['items'])} مورد عمومی\n  فرصت: {x['content_gap_prompt']}" for x in report['competitors'])
+                    lines.append('\n⚠️ این گزارش برای تحقیق است و هیچ محتوایی را کپی یا خودکار منتشر نمی‌کند.')
+                    tg_send(chat_id, '\n'.join(lines), CONTROL_MENU)
+            elif data == 'research-help':
+                tg_send(chat_id, '📚 راهنمای تحقیق:\n\n۱) ایده و تحقیق: موضوعات روز و لینک منابع عمومی.\n۲) تحلیل رقبا: مقایسه منابع عمومی رقبای تنظیم‌شده.\n۳) تقویم محتوا: برنامه هفتگی از ایده‌های ثبت‌شده.\n\nهمه خروجی‌ها قبل از انتشار باید بررسی و بازنویسی شوند.', CONTROL_MENU)
             else:
                 tg_send(chat_id, '📚 برای پردازش محتوای جدید، آن را در کانال Base منتشر کنید.', MAIN_MENU)
             results.append('callback-' + data)
