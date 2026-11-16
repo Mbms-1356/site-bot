@@ -34,7 +34,12 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
         file_id = msg['video'].get('file_id'); name = 'upload.mp4'; kind = 'video'
     else:
         return False
-    data = file_bytes(file_id)
+    try:
+        tg_send(chat_id, '⏳ فایل دریافت شد؛ در حال بررسی و ساخت بسته محتوا هستم...', menu)
+        data = file_bytes(file_id)
+    except Exception:
+        tg_send(chat_id, '⚠️ دریافت فایل از تلگرام ناموفق بود. لطفاً همان عکس را دوباره ارسال کنید.', menu)
+        return True
     category = classify(name, kind)
     if category == 'image':
         extracted = ocr_image(data, name)
