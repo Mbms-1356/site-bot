@@ -113,8 +113,13 @@ def record_unanswered(text):
             body = response.json(); sha = body.get('sha')
             rows = json.loads(base64.b64decode(body.get('content', '')).decode('utf-8'))
         digest = hashlib.sha256(_norm(question).encode()).hexdigest()[:16]
-        if any(item.get('id') == digest for item in rows):
-            return True
+        for item in rows:
+            if item.get('id') == digest:
+                item['count'] = int(item.get('count', 1)) + 1
+                item['last_seen'] = int(time.time())
+                payload = {'message': 'Update unanswered assistant question', 'content': base64.b64encode(json.dumps(rows[:300], ensure_ascii=False, indent=2).encode()).decode()}
+                if sha: payload['sha'] = sha
+                return requests.put(url, headers={**headers, 'Content-Type': 'application/json'}, json=payload, timeout=20).ok
         rows.insert(0, {'id': digest, 'question': question, 'count': 1, 'last_seen': int(time.time()), 'status': 'needs_review'})
         payload = {'message': 'Log unanswered assistant question', 'content': base64.b64encode(json.dumps(rows[:300], ensure_ascii=False, indent=2).encode()).decode()}
         if sha: payload['sha'] = sha

@@ -51,6 +51,7 @@ CONTROL_MENU = {'inline_keyboard': [
     [{'text': '📅 تقویم محتوا', 'callback_data': 'calendar'}, {'text': '📚 راهنمای تحقیق', 'callback_data': 'research-help'}],
     [{'text': '📣 رشد قانونی مخاطب', 'callback_data': 'growth'}],
     [{'text': '🗂 آرشیو دارایی‌ها', 'callback_data': 'archive'}, {'text': '🧠 دانش چت‌بات', 'callback_data': 'knowledge'}],
+    [{'text': '📈 تحلیل سؤال‌ها', 'callback_data': 'question-insights'}],
     [{'text': '🚀 شروع /start', 'callback_data': 'main'}, {'text': '🔄 وضعیت /status', 'callback_data': 'status'}],
     [{'text': '📊 کنترل /control', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس /drafts', 'callback_data': 'drafts'}],
     [{'text': 'ℹ️ راهنمای کامل', 'callback_data': 'help'}, {'text': '🔙 منوی اصلی', 'callback_data': 'main'}],
@@ -250,6 +251,24 @@ def growth_plan():
         ],
         'disclaimer': 'هیچ کاربر رقیب به‌صورت خودکار شناسایی، پیام‌دهی یا دعوت نمی‌شود.'
     }
+
+
+def build_question_insights(rows):
+    """Turn unanswered questions into review-only FAQ and challenge candidates."""
+    clean = [x for x in rows if x.get('question')]
+    clean.sort(key=lambda x: (int(x.get('count', 1)), x.get('last_seen', 0)), reverse=True)
+    faq = []
+    challenges = []
+    for row in clean[:30]:
+        question = str(row['question']).strip()
+        faq.append({'id': row.get('id'), 'question': question, 'priority': int(row.get('count', 1)), 'status': 'needs_review',
+                    'answer_instruction': 'از آرشیو آموزشی تأییدشده پاسخ کوتاه فارسی بساز؛ ادعای سود و سیگنال ممنوع.'})
+        challenges.append({'id': 'question-' + str(row.get('id')), 'category': 'پرسش کاربران',
+                           'question': question, 'status': 'needs_review',
+                           'note': 'قبل از فعال‌سازی، پاسخ صحیح و گزینه‌های انحرافی باید توسط مدیر بررسی شوند.'})
+    return {'generated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            'total_questions': len(clean), 'faq_candidates': faq[:20], 'challenge_candidates': challenges[:20],
+            'policy': 'این خروجی فقط پیشنهاد است و خودکار منتشر یا فعال نمی‌شود.'}
 
 
 def file_bytes(file_id):
@@ -519,6 +538,21 @@ def main():
                 else:
                     safe = sum(1 for x in records if x.get('safe_for_assistant'))
                     tg_send(chat_id, f'🧠 نمایه دانش چت‌بات\n\nکل مدخل‌ها: {len(records)}\nمجاز برای پاسخ‌گویی: {safe}\n\nچت‌بات فقط از محتوای تأییدشده یا منتشرشده استفاده می‌کند و منابع نامعتبر را قطعی بیان نمی‌کند.', CONTROL_MENU)
+            elif data == 'question-insights':
+                try:
+                    unanswered = json.loads(gh_text('content-control/unanswered-questions.json', SITE_REPO) or '[]')
+                except Exception:
+                    unanswered = []
+                insights = build_question_insights(unanswered)
+                put_json('content-control/question-insights.json', insights, 'Update unanswered question insights', SITE_REPO)
+                top = insights['faq_candidates'][:5]
+                if top:
+                    lines = ['📈 تحلیل سؤال‌های کاربران:', f"کل سؤال‌های ثبت‌شده: {insights['total_questions']}", '']
+                    lines.extend(f"{i + 1}. {x['question']} | اولویت: {x['priority']}" for i, x in enumerate(top))
+                    lines.append('\n✅ از همین فهرست، کاندیدای FAQ و چالش ساخته شد؛ فعال‌سازی هنوز نیازمند بررسی مدیر است.')
+                else:
+                    lines = ['📈 هنوز سؤال بی‌پاسخ ثبت نشده است.']
+                tg_send(chat_id, '\n'.join(lines), CONTROL_MENU)
             elif data == 'research-help':
                 tg_send(chat_id, '📚 راهنمای تحقیق:\n\n۱) ایده و تحقیق: موضوعات روز و لینک منابع عمومی.\n۲) تحلیل رقبا: مقایسه منابع عمومی رقبای تنظیم‌شده.\n۳) تقویم محتوا: برنامه هفتگی از ایده‌های ثبت‌شده.\n\nهمه خروجی‌ها قبل از انتشار باید بررسی و بازنویسی شوند.', CONTROL_MENU)
             else:
