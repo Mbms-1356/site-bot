@@ -17,6 +17,21 @@ def source_id(source_link: str, source_text: str) -> str:
     return hashlib.sha256(raw.encode('utf-8')).hexdigest()[:20]
 
 
+def _hashtag(value: str) -> str:
+    value = re.sub(r'[^\wآ-ی]+', '', str(value or ''), flags=re.UNICODE)
+    return '#' + value[:32] if value else ''
+
+
+def _hashtags(title: str, keywords: List[Any]) -> List[str]:
+    base = ['#فارکس', '#LIT', '#مدیریت_ریسک', '#روانشناسی_ترید', '#آموزش_معامله_گری']
+    generated = [_hashtag(x) for x in [title] + list(keywords[:4])]
+    result = []
+    for tag in base + generated:
+        if tag and tag not in result:
+            result.append(tag)
+    return result[:10]
+
+
 def make_package(article: Dict[str, Any], source_link: str, source_text: str,
                  transcript: str = '', audio_url: str = '') -> Dict[str, Any]:
     title = article.get('title', 'آموزش جدید Forexin')
@@ -25,34 +40,44 @@ def make_package(article: Dict[str, Any], source_link: str, source_text: str,
     keywords = article.get('keywords') or []
     body = article.get('body') or []
     script = article.get('podcast_script') or excerpt
+    description = article.get('description') or excerpt[:155]
+    seo_title = (article.get('seo_title') or title)[:60]
+    seo_description = description[:155]
+    tags = _hashtags(title, keywords)
+    hashtag_text = ' '.join(tags)
+    risk_notice = '⚠️ این محتوا صرفاً آموزشی است و توصیه معاملاتی یا تضمین سود نیست.'
+    cta = 'برای آموزش کامل‌تر، مقاله و محتوای آموزشی Forexin را دنبال کنید.'
     hooks = [
         f'چرا بیشتر معامله‌گران در موضوع «{title}» اشتباه می‌کنند؟',
         f'قبل از تصمیم‌گیری درباره «{title}»، این نکته را بررسی کنید.',
         f'اگر با «{title}» مشکل دارید، این آموزش کوتاه را ببینید.',
     ]
-    cta = 'برای آموزش‌های بیشتر، مقاله کامل و دستیار آموزشی Forexin را ببینید.'
     return {
-        'schema_version': '1.0',
+        'schema_version': '1.1',
         'id': source_id(source_link, source_text),
         'slug': slug,
         'status': 'draft',
         'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'source': {'url': source_link, 'text': source_text[:4000], 'transcript': transcript[:12000]},
-        'article': {'title': title, 'description': article.get('description', ''), 'excerpt': excerpt,
+        'article': {'title': title, 'description': description, 'excerpt': excerpt,
                     'keywords': keywords, 'category': article.get('category', 'آموزش'), 'body': body},
+        'seo': {'title': seo_title, 'description': seo_description, 'slug': slug,
+                'keywords': keywords, 'canonical_path': 'articles/' + slug + '.html',
+                'image_alt': 'تصویر آموزشی درباره ' + title,
+                'hashtags': tags},
         'podcast': {'script': script, 'audio_url': audio_url},
         'short_video': {'hooks': hooks, 'script': script[:1800], 'duration_seconds': 45,
                         'caption_overlay': title, 'cta': cta},
         'visuals': {'cover_prompt': f'کاور آموزشی حرفه‌ای فارسی درباره {title}، سبک مدرن مالی، بدون وعده سود، فضای خوانا برای تیتر',
                     'thumbnail_text': title[:48]},
         'platforms': {
-            'instagram': {'caption': excerpt + '\n\n' + cta, 'hashtags': ['#فارکس', '#LIT', '#مدیریت_ریسک']},
-            'telegram': {'text': title + '\n\n' + excerpt + '\n\n' + cta},
-            'whatsapp': {'text': title + '\n' + excerpt[:500] + '\n' + cta},
-            'tiktok': {'caption': hooks[0] + '\n' + cta, 'hashtags': ['#forex', '#trading', '#LIT']},
-            'youtube': {'title': title, 'description': excerpt + '\n\n' + cta, 'tags': keywords},
-            'linkedin': {'text': 'یادداشت آموزشی: ' + title + '\n\n' + excerpt},
-            'x': {'text': hooks[0] + '\n' + excerpt[:240] + '\n' + cta},
+            'instagram': {'caption': excerpt + '\n\n' + cta + '\n\n' + risk_notice, 'hashtags': tags},
+            'telegram': {'text': title + '\n\n' + excerpt + '\n\n' + cta + '\n\n' + risk_notice, 'hashtags': tags},
+            'whatsapp': {'text': title + '\n' + excerpt[:500] + '\n' + cta + '\n' + risk_notice, 'hashtags': tags[:6]},
+            'tiktok': {'caption': hooks[0] + '\n' + cta + '\n' + risk_notice, 'hashtags': tags[:8]},
+            'youtube': {'title': seo_title, 'description': excerpt + '\n\n' + cta + '\n\n' + risk_notice, 'tags': keywords, 'hashtags': tags},
+            'linkedin': {'text': 'یادداشت آموزشی: ' + title + '\n\n' + excerpt + '\n\n' + cta + '\n\n' + risk_notice, 'hashtags': tags[:6]},
+            'x': {'text': hooks[0] + '\n' + excerpt[:240] + '\n' + cta + '\n' + risk_notice, 'hashtags': tags[:5]},
         },
         'quality': {'score': 0, 'checks': {'source_present': bool(source_text or transcript),
                     'has_title': bool(title), 'has_description': bool(article.get('description')),

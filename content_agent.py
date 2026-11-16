@@ -131,7 +131,7 @@ def transcribe(data, name='media.mp3'):
 
 def make_article(source, transcript):
     prompt = '''از محتوای آموزشی زیر فقط JSON معتبر تولید کن. موضوع فارکس و LIT است. ادعای سود قطعی، سیگنال خرید/فروش و وعده درآمد ممنوع است. پاسخ فارسی باشد.
-فیلدها: slug انگلیسی کوتاه، title فارسی، description حداکثر 155 کاراکتر، keywords آرایه 5 تا 8تایی، body آرایه‌ای از 5 تا 8 پاراگراف آموزشی، excerpt یک پاراگراف، podcast_script متن روان 2 تا 4 دقیقه‌ای، category.
+فیلدها: slug انگلیسی کوتاه، title فارسی، seo_title حداکثر 60 کاراکتر، description حداکثر 155 کاراکتر، keywords آرایه 5 تا 8تایی، body آرایه‌ای از 5 تا 8 پاراگراف آموزشی، excerpt یک پاراگراف، podcast_script متن روان 2 تا 4 دقیقه‌ای، category.
 منبع را تحریف نکن و اگر نکته‌ای نامطمئن است آن را قطعی ننویس.
 CONTENT:
 ''' + source[:12000] + '\nTRANSCRIPT:\n' + transcript[:30000]
