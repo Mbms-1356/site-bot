@@ -21,6 +21,12 @@ if not TOKEN or ':' not in TOKEN:
 
 bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
 
+
+def send_audio_reply(chat_id, text):
+    audio = synthesize_fa(text)
+    if audio:
+        bot.send_audio(chat_id, audio, caption='🔊 پاسخ صوتی آموزشی از آرشیو تأییدشده')
+
 SITE = 'https://mbms-1356.github.io/forexin-site-/'
 CHANNEL = 'https://t.me/forexin_turkaslanifree'
 CHANNEL_POST = '@forexin_turkaslanifree'
@@ -562,9 +568,7 @@ def txt(m):
                     mk.add(types.InlineKeyboardButton('📖 ' + related.get('title', 'مطالب مرتبط')[:35], url=related['url']))
             answer_text = f"🤖 <b>پاسخ آموزشی</b>\n🏷 موضوع: {result['category']} | سطح: {result['difficulty']}\n\n{result['answer']}\n\n🛡 <b>نکته:</b> {result['tip']}\n\n⚠️ این پاسخ آموزشی است، نه توصیه معاملاتی."
             bot.send_message(m.chat.id, answer_text, reply_markup=mk)
-            audio = synthesize_fa(result['answer'] + '\n' + result['tip'])
-            if audio:
-                bot.send_audio(m.chat.id, audio, caption='🔊 پاسخ صوتی آموزشی از آرشیو تأییدشده')
+            threading.Thread(target=send_audio_reply, args=(m.chat.id, result['answer'] + '\n' + result['tip']), daemon=True).start()
         else:
             record_unanswered(t)
             bot.send_message(m.chat.id, '🤖 ' + result['text'] + '\n\n📝 سؤال شما برای تکمیل FAQ و آموزش‌های بعدی قابل بررسی است.')

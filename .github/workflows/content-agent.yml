@@ -5,6 +5,9 @@ on:
     - cron: '*/5 * * * *'
 permissions:
   contents: write
+concurrency:
+  group: content-agent-single
+  cancel-in-progress: false
 jobs:
   publish-content:
     runs-on: ubuntu-latest
