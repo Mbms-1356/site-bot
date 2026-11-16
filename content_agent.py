@@ -8,10 +8,10 @@ from private_intake import process_private_upload
 from publishing_orchestrator import build_publish_queue
 from visual_asset_agent import build_asset_jobs
 from analytics_agent import build_report as build_analytics_report
-from github_app_auth import readiness as github_app_readiness
+from github_app_auth import readiness as github_app_readiness, github_token
 
 TOKEN = os.environ.get('TOKEN_CONTENT_AGENT', '').strip()
-PAT = os.environ.get('GH_PAT', '').strip()
+PAT = github_token()
 GROQ = os.environ.get('GROQ_KEY', '').strip()
 OPENROUTER = os.environ.get('OPENROUTER_KEY', '').strip()
 CONTENT_ADMIN_CHAT_ID = os.environ.get('CONTENT_ADMIN_CHAT_ID', '').strip()
