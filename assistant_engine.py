@@ -15,6 +15,7 @@ GH_TOKEN = os.environ.get('GH_TOKEN', os.environ.get('GH_PAT', '')).strip()
 _KNOWLEDGE_CACHE = {'at': 0.0, 'rows': []}
 UNANSWERED_REPO = os.environ.get('KNOWLEDGE_REPO', 'Mbms-1356/forexin-site-')
 UNANSWERED_PATH = 'content-control/unanswered-questions.json'
+ACTIVE_FAQ_PATH = 'content-control/active-faq.json'
 
 
 def _norm(text):
@@ -54,11 +55,34 @@ def _knowledge():
         return []
 
 
+def _active_faq():
+    """Load only reviewed FAQ entries that contain an actual approved answer."""
+    local = Path(ACTIVE_FAQ_PATH)
+    try:
+        if local.exists():
+            rows = json.loads(local.read_text(encoding='utf-8'))
+        elif not GH_TOKEN:
+            return []
+        else:
+            url = f'https://api.github.com/repos/{KNOWLEDGE_REPO}/contents/{ACTIVE_FAQ_PATH}'
+            response = requests.get(url, headers={'Authorization': f'Bearer {GH_TOKEN}', 'Accept': 'application/vnd.github+json'}, timeout=15)
+            if not response.ok:
+                return []
+            rows = json.loads(base64.b64decode(response.json().get('content', '')).decode('utf-8'))
+        return [x for x in rows if x.get('status') == 'active' and x.get('answer')]
+    except Exception:
+        return []
+
+
 def answer_question(text):
     query = _norm(text)
     if len(query) < 3:
         return {'matched': False, 'text': 'لطفاً سؤال کامل‌تری درباره LIT، مدیریت ریسک، سشن‌ها یا آموزش بازار بنویسید.'}
     rows = _questions()
+    for item in _active_faq():
+        rows.append({'id': item.get('id'), '_archive': True, 'category': 'FAQ تأییدشده',
+                     'question': item.get('question', ''), 'explanation': item.get('answer', ''),
+                     'tip': 'پاسخ از FAQ تأییدشده استخراج شده است.', 'related_url': item.get('url', '')})
     for item in _knowledge():
         if not item.get('safe_for_assistant'):
             continue

@@ -14,6 +14,7 @@ STATE_PATH = Path(os.environ.get('CHALLENGE_STATE_FILE', f'challenge_state_{NAME
 CONTENT_PATH = Path('content/challenges.json')
 KNOWLEDGE_PATH = os.environ.get('KNOWLEDGE_PATH', 'content-control/knowledge/index.json')
 KNOWLEDGE_REPO = os.environ.get('KNOWLEDGE_REPO', 'Mbms-1356/forexin-site-')
+ACTIVE_CHALLENGES_PATH = 'content-control/active-challenges.json'
 TEHRAN = timezone(timedelta(hours=3, minutes=30))
 
 
@@ -55,11 +56,27 @@ def _knowledge_questions():
     return questions
 
 
+def _active_questions():
+    rows = []
+    try:
+        if Path(ACTIVE_CHALLENGES_PATH).exists():
+            rows = _load(Path(ACTIVE_CHALLENGES_PATH), [])
+        elif GH_TOKEN:
+            url = f'https://api.github.com/repos/{KNOWLEDGE_REPO}/contents/{ACTIVE_CHALLENGES_PATH}'
+            response = requests.get(url, headers={'Authorization': f'Bearer {GH_TOKEN}', 'Accept': 'application/vnd.github+json'}, timeout=15)
+            if response.ok:
+                rows = json.loads(base64.b64decode(response.json().get('content', '')).decode('utf-8'))
+    except Exception:
+        rows = []
+    return [row for row in rows if row.get('status') == 'active' and row.get('options') and 'correct' in row]
+
+
 def _all_questions():
     base = _load(CONTENT_PATH, [])
     generated = _knowledge_questions()
+    active = _active_questions()
     seen = {q.get('id') for q in base}
-    return base + [q for q in generated if q.get('id') not in seen]
+    return base + [q for q in generated + active if q.get('id') not in seen]
 
 
 def _save_to_github():

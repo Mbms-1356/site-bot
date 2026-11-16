@@ -598,6 +598,15 @@ def main():
                     candidate['status'] = 'approved' if action == 'candidate-approve' else 'rejected'
                     if action == 'candidate-activate':
                         candidate['status'] = 'active'
+                        if kind == 'challenge':
+                            candidate.update({
+                                'category': candidate.get('category', 'پرسش کاربران'),
+                                'difficulty': 'متوسط',
+                                'options': ['بررسی آموزشی موضوع بر اساس آرشیو تأییدشده', 'تضمین سود بدون برنامه', 'نادیده‌گرفتن مدیریت ریسک', 'تصمیم‌گیری بدون تحلیل'],
+                                'correct': 0,
+                                'explanation': 'پاسخ باید با محتوای آموزشی تأییدشده آرشیو و اصول مدیریت ریسک بررسی شود.',
+                                'tip': 'این چالش آموزشی است و نتیجه معاملاتی را تضمین نمی‌کند.',
+                            })
                     candidate['reviewed_by'] = str(chat_id)
                     candidate['reviewed_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
                     put_json('content-control/question-insights.json', insights, 'Review FAQ or challenge candidate')
