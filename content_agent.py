@@ -237,7 +237,7 @@ def main():
                 results.append('private-start')
                 continue
             if text == '/status':
-                tg_send(msg['chat']['id'], '✅ کارخانه محتوا فعال است و هر ۱۰ دقیقه کانال Base را بررسی می‌کند.')
+                tg_send(msg['chat']['id'], '✅ کارخانه محتوا فعال است و حداکثر هر ۵ دقیقه کانال Base را بررسی می‌کند.')
                 results.append('private-status')
                 continue
             if text in ('/control', '/drafts'):
