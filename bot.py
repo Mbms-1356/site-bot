@@ -7,6 +7,7 @@ import yt_dlp
 import requests
 from challenge_engine import get_daily, answer as answer_challenge, profile as challenge_profile, report as challenge_report
 from assistant_engine import answer_question
+from assistant_tts import synthesize_fa
 
 TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '').strip()
 if not TOKEN:
@@ -556,7 +557,11 @@ def txt(m):
             mk = types.InlineKeyboardMarkup(row_width=1)
             if result.get('url'):
                 mk.add(types.InlineKeyboardButton('📚 مطالعه مقاله مرتبط', url=result['url']))
-            bot.send_message(m.chat.id, f"🤖 <b>پاسخ آموزشی</b>\n🏷 موضوع: {result['category']} | سطح: {result['difficulty']}\n\n{result['answer']}\n\n🛡 <b>نکته:</b> {result['tip']}\n\n⚠️ این پاسخ آموزشی است، نه توصیه معاملاتی.", reply_markup=mk)
+            answer_text = f"🤖 <b>پاسخ آموزشی</b>\n🏷 موضوع: {result['category']} | سطح: {result['difficulty']}\n\n{result['answer']}\n\n🛡 <b>نکته:</b> {result['tip']}\n\n⚠️ این پاسخ آموزشی است، نه توصیه معاملاتی."
+            bot.send_message(m.chat.id, answer_text, reply_markup=mk)
+            audio = synthesize_fa(result['answer'] + '\n' + result['tip'])
+            if audio:
+                bot.send_audio(m.chat.id, audio, caption='🔊 پاسخ صوتی آموزشی از آرشیو تأییدشده')
         else:
             bot.send_message(m.chat.id, '🤖 ' + result['text'])
         return

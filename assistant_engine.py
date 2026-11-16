@@ -51,14 +51,15 @@ def answer_question(text):
     for item in _knowledge():
         if not item.get('safe_for_assistant'):
             continue
-        rows.append({'id': item.get('id'), 'category': item.get('category', 'آموزش آرشیو'),
+        rows.append({'id': item.get('id'), '_archive': True, 'category': item.get('category', 'آموزش آرشیو'),
                      'question': item.get('title', ''), 'explanation': item.get('text', ''),
+                     'keywords': ' '.join(map(str, item.get('keywords', []))),
                      'tip': 'این پاسخ از محتوای آموزشی تأییدشده آرشیو استخراج شده است.',
                      'related_url': item.get('source_url', '') or 'https://mbms-1356.github.io/forexin-site-/learn.html'})
     query_words = set(query.split())
     scored = []
     for q in rows:
-        hay = _norm(' '.join([q.get('question', ''), q.get('category', ''), q.get('explanation', ''), q.get('tip', '')]))
+        hay = _norm(' '.join([q.get('question', ''), q.get('category', ''), q.get('keywords', ''), q.get('explanation', ''), q.get('tip', '')]))
         words = set(hay.split())
         overlap = len(query_words & words) / max(1, len(query_words))
         similarity = SequenceMatcher(None, query, _norm(q.get('question', ''))).ratio()
@@ -66,7 +67,7 @@ def answer_question(text):
         scored.append((score, q))
     scored.sort(key=lambda item: item[0], reverse=True)
     score, q = scored[0]
-    if score < 0.22 or not (query_words & set(_norm(q.get('question', '')).split())):
+    if score < 0.22 or not (query_words & set(_norm(' '.join([q.get('question', ''), q.get('keywords', ''), q.get('explanation', '')])).split())):
         return {'matched': False, 'text': 'برای این سؤال پاسخ مطمئن و مرتبطی در بانک آموزشی فعلی پیدا نکردم. لطفاً درباره LIT، نقدینگی، POI، Imbalance، مدیریت ریسک، سشن‌ها یا ژورنال سؤال کنید.'}
     return {
         'matched': True,
@@ -77,4 +78,5 @@ def answer_question(text):
         'answer': q.get('explanation', ''),
         'tip': q.get('tip', ''),
         'url': q.get('related_url', 'https://mbms-1356.github.io/forexin-site-/learn.html'),
+        'source': 'آرشیو آموزشی تأییدشده' if q.get('_archive') else 'بانک آموزشی',
     }

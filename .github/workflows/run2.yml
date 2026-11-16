@@ -18,6 +18,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: deps
-        run: pip install pyTelegramBotAPI yt-dlp requests >/dev/null 2>&1
+        run: pip install pyTelegramBotAPI yt-dlp requests edge-tts >/dev/null 2>&1
       - name: run bot2
         run: python3 bot2.py
