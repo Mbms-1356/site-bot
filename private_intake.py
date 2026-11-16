@@ -1,5 +1,6 @@
 """Private Telegram intake orchestration for the content factory."""
 import hashlib
+from pathlib import Path
 from content_package import make_package, score_package
 from content_control import save_package
 from file_intake import classify, extract_text, ocr_image
@@ -42,15 +43,18 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
         tg_send(chat_id, '⚠️ دریافت فایل از تلگرام ناموفق بود. لطفاً همان عکس را دوباره ارسال کنید.', menu)
         return True
     category = classify(name, kind)
+    media_path = ''
+    if put_binary and category in ('image', 'audio', 'video'):
+        digest = hashlib.sha256(data).hexdigest()[:20]
+        suffix = Path(name or 'upload.bin').suffix.lower()
+        if suffix not in ('.jpg', '.jpeg', '.png', '.webp', '.mp3', '.m4a', '.wav', '.ogg', '.mp4', '.mov', '.mkv', '.webm'):
+            suffix = '.bin'
+        media_path = f'media/uploads/{digest}{suffix}'
+        try:
+            put_binary(media_path, data, 'Archive original ' + category + ' upload')
+        except Exception:
+            media_path = ''
     if category == 'image':
-        media_path = ''
-        if put_binary:
-            digest = hashlib.sha256(data).hexdigest()[:20]
-            media_path = f'media/uploads/{digest}.jpg'
-            try:
-                put_binary(media_path, data, 'Archive original educational image')
-            except Exception:
-                media_path = ''
         extracted = ocr_image(data, name)
         if not extracted:
             tg_send(chat_id, '⚠️ عکس دریافت شد، اما متن خوانایی برای OCR پیدا نشد. لطفاً عکس واضح‌تر یا فایل اصلی را ارسال کنید.', menu)
@@ -80,6 +84,10 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
         tg_send(chat_id, '⚠️ فایل خوانده شد اما تولید پیش‌نویس ناموفق بود.', menu)
         return True
     package = make_package(article, '', extracted, extracted)
+    if media_path:
+        package.setdefault('source', {})['media_path'] = media_path
+        package['source']['media_url'] = 'https://mbms-1356.github.io/forexin-site-/' + media_path
+        package['source']['media_type'] = category
     score_package(package)
     save_package(package, lambda path: gh_text(path), lambda path, value, message: put_json(path, value, message))
     tg_send(chat_id, f"✅ فایل دریافت و پیش‌نویس ساخته شد.\n📄 نوع: {category}\n📊 امتیاز: {package['quality']['score']}", menu)
