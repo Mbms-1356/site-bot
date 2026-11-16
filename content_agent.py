@@ -2,6 +2,8 @@ import base64, html, io, json, os, re, subprocess, tempfile, time, urllib.parse,
 from pathlib import Path
 from content_package import make_package, score_package
 from content_control import load_index, save_package, summary
+from file_intake import classify, extract_text
+from private_intake import process_private_upload
 
 TOKEN = os.environ.get('TOKEN_CONTENT_AGENT', '').strip()
 PAT = os.environ.get('GH_PAT', '').strip()
@@ -34,6 +36,8 @@ def tg_send(chat_id, text, keyboard=None):
 MAIN_MENU = {'inline_keyboard': [
     [{'text': '📊 وضعیت کارخانه', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس‌ها', 'callback_data': 'drafts'}],
     [{'text': '📚 راهنمای کار', 'callback_data': 'help'}, {'text': '🔄 بررسی کانال Base', 'callback_data': 'status'}],
+    [{'text': '📥 ارسال محتوای جدید', 'callback_data': 'intake'}, {'text': '📄 PDF / Word / متن', 'callback_data': 'document'}],
+    [{'text': '🎙 صوت / ویدئو', 'callback_data': 'media'}, {'text': '🖼 عکس آموزشی', 'callback_data': 'image'}],
 ]}
 
 
@@ -86,6 +90,14 @@ def state_save(st):
 def file_bytes(file_id):
     f = tg('getFile', {'file_id': file_id})['result']['file_path']
     return http('https://api.telegram.org/file/bot' + TOKEN + '/' + f, timeout=180)
+
+
+def intake_state(st, chat_id, mode=None):
+    states = st.setdefault('intake', {})
+    key = str(chat_id)
+    if mode is not None:
+        states[key] = mode
+    return states.get(key, '')
 
 
 def transcribe(data, name='media.mp3'):
@@ -230,6 +242,11 @@ def main():
                         tg_send(msg['chat']['id'], '📝 هنوز بسته محتوایی ثبت نشده است.')
                 results.append('private-control')
                 continue
+            if process_private_upload(msg, st, file_bytes, transcribe, make_article, lambda path: gh_text(path, SITE_REPO),
+                                      lambda path, value, message: put_json(path, value, message, SITE_REPO),
+                                      tg_send, MAIN_MENU):
+                results.append('private-intake')
+                continue
         callback = u.get('callback_query')
         if callback:
             chat_id = callback.get('message', {}).get('chat', {}).get('id')
@@ -242,6 +259,8 @@ def main():
                 tg_send(chat_id, text_out, MAIN_MENU)
             elif data == 'status':
                 tg_send(chat_id, '✅ کارخانه محتوا فعال است و کانال Base را در اجرای بعدی بررسی می‌کند.', MAIN_MENU)
+            elif data in ('intake', 'document', 'media', 'image'):
+                tg_send(chat_id, '📥 فایل یا متن آموزشی را همین‌جا ارسال کنید. پس از دریافت، پیش‌نویس مقاله، پادکست، ریلز و نسخه‌های پلتفرمی ساخته می‌شود.', MAIN_MENU)
             else:
                 tg_send(chat_id, '📚 برای پردازش محتوای جدید، آن را در کانال Base منتشر کنید.', MAIN_MENU)
             results.append('callback-' + data)
