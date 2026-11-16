@@ -34,10 +34,19 @@ def tg_send(chat_id, text, keyboard=None):
 
 
 MAIN_MENU = {'inline_keyboard': [
+    [{'text': '🧭 مرکز عملیات', 'callback_data': 'hub'}],
     [{'text': '📊 وضعیت کارخانه', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس‌ها', 'callback_data': 'drafts'}],
     [{'text': '📚 راهنمای کار', 'callback_data': 'help'}, {'text': '🔄 بررسی کانال Base', 'callback_data': 'status'}],
     [{'text': '📥 ارسال محتوای جدید', 'callback_data': 'intake'}, {'text': '📄 PDF / Word / متن', 'callback_data': 'document'}],
     [{'text': '🎙 صوت / ویدئو', 'callback_data': 'media'}, {'text': '🖼 عکس آموزشی', 'callback_data': 'image'}],
+]}
+
+CONTROL_MENU = {'inline_keyboard': [
+    [{'text': '📦 بسته کامل محتوا', 'callback_data': 'intake'}, {'text': '📄 PDF / Word / متن', 'callback_data': 'document'}],
+    [{'text': '🎙 صوت / ویدئو', 'callback_data': 'media'}, {'text': '🖼 عکس و کاور', 'callback_data': 'image'}],
+    [{'text': '📝 پیش‌نویس‌ها', 'callback_data': 'drafts'}, {'text': '📊 گزارش مرکز کنترل', 'callback_data': 'control'}],
+    [{'text': '🔎 ایده و تحقیق', 'callback_data': 'research'}, {'text': '📅 تقویم محتوا', 'callback_data': 'calendar'}],
+    [{'text': 'ℹ️ راهنمای کامل', 'callback_data': 'help'}, {'text': '🔙 منوی اصلی', 'callback_data': 'main'}],
 ]}
 
 
@@ -253,6 +262,10 @@ def main():
             data = callback.get('data', '')
             if data == 'control':
                 tg_send(chat_id, summary(load_index(lambda path: gh_text(path, SITE_REPO))), MAIN_MENU)
+            elif data == 'hub':
+                tg_send(chat_id, '🧭 مرکز عملیات Forexin\n\nهمه فرمان‌های تولید، دریافت، کنترل و برنامه‌ریزی محتوا از این بخش قابل دسترسی است.', CONTROL_MENU)
+            elif data == 'main':
+                tg_send(chat_id, 'منوی اصلی:', MAIN_MENU)
             elif data == 'drafts':
                 rows = load_index(lambda path: gh_text(path, SITE_REPO))[:8]
                 text_out = '📝 هنوز پیش‌نویسی ثبت نشده است.' if not rows else '\n'.join(['📝 آخرین پیش‌نویس‌ها:'] + [f"• {x.get('title','بدون عنوان')} | {x.get('status','draft')} | امتیاز {x.get('score',0)}" for x in rows])
@@ -261,6 +274,9 @@ def main():
                 tg_send(chat_id, '✅ کارخانه محتوا فعال است و کانال Base را در اجرای بعدی بررسی می‌کند.', MAIN_MENU)
             elif data in ('intake', 'document', 'media', 'image'):
                 tg_send(chat_id, '📥 فایل یا متن آموزشی را همین‌جا ارسال کنید. پس از دریافت، پیش‌نویس مقاله، پادکست، ریلز و نسخه‌های پلتفرمی ساخته می‌شود.', MAIN_MENU)
+            elif data in ('research', 'calendar'):
+                label = 'تحقیق و ایده‌پردازی' if data == 'research' else 'تقویم محتوایی'
+                tg_send(chat_id, f'🛠 بخش «{label}» در مرحله بعد فعال می‌شود. فعلاً محتوای ورودی را از همین مرکز دریافت و به پیش‌نویس تبدیل کنید.', CONTROL_MENU)
             else:
                 tg_send(chat_id, '📚 برای پردازش محتوای جدید، آن را در کانال Base منتشر کنید.', MAIN_MENU)
             results.append('callback-' + data)
