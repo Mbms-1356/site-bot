@@ -52,6 +52,7 @@ CONTROL_MENU = {'inline_keyboard': [
     [{'text': '📣 رشد قانونی مخاطب', 'callback_data': 'growth'}],
     [{'text': '🗂 آرشیو دارایی‌ها', 'callback_data': 'archive'}, {'text': '🧠 دانش چت‌بات', 'callback_data': 'knowledge'}],
     [{'text': '📈 تحلیل سؤال‌ها', 'callback_data': 'question-insights'}],
+    [{'text': '🩺 سلامت سیستم', 'callback_data': 'health'}, {'text': '🔁 صف خطاها', 'callback_data': 'errors'}],
     [{'text': '🚀 شروع /start', 'callback_data': 'main'}, {'text': '🔄 وضعیت /status', 'callback_data': 'status'}],
     [{'text': '📊 کنترل /control', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس /drafts', 'callback_data': 'drafts'}],
     [{'text': 'ℹ️ راهنمای کامل', 'callback_data': 'help'}, {'text': '🔙 منوی اصلی', 'callback_data': 'main'}],
@@ -125,6 +126,23 @@ def state_load():
 def state_save(st):
     st['seen'] = st.get('seen', [])[-300:]
     gh_put(STATE_PATH, json.dumps(st, ensure_ascii=False, indent=2), 'Update content agent state', SELF_REPO)
+
+
+def record_failure(st, update_id, error):
+    failures = st.setdefault('failures', [])
+    failures.insert(0, {'update_id': str(update_id), 'error': str(error)[:300], 'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'status': 'retry_pending'})
+    st['failures'] = failures[:50]
+
+
+def health_report(st):
+    return ('🩺 سلامت کارخانه محتوا\n\n'
+            f"Telegram token: {'✅' if TOKEN else '❌'}\n"
+            f"GitHub token: {'✅' if PAT else '❌'}\n"
+            f"LLM key: {'✅' if OPENROUTER else '⚠️ ندارد'}\n"
+            f"Transcription key: {'✅' if GROQ else '⚠️ ندارد'}\n"
+            f"آخرین offset: {st.get('offset', 0)}\n"
+            f"خطاهای در صف بازبینی: {len(st.get('failures', []))}\n\n"
+            'پردازش‌های شکست‌خورده در اجرای بعدی قابل بررسی هستند.')
 
 
 def build_research(index):
@@ -437,9 +455,15 @@ def main():
                         tg_send(msg['chat']['id'], '📝 هنوز بسته محتوایی ثبت نشده است.')
                 results.append('private-control')
                 continue
-            if process_private_upload(msg, st, file_bytes, transcribe, make_article, lambda path: gh_text(path, SITE_REPO),
+            try:
+                handled_private = process_private_upload(msg, st, file_bytes, transcribe, make_article, lambda path: gh_text(path, SITE_REPO),
                                       lambda path, value, message: put_json(path, value, message, SITE_REPO),
-                                      tg_send, MAIN_MENU):
+                                      tg_send, MAIN_MENU)
+            except Exception as exc:
+                record_failure(st, u.get('update_id'), exc)
+                tg_send(msg['chat']['id'], '⚠️ پردازش این فایل ناموفق شد و خطا برای بررسی ثبت شد. لطفاً دوباره ارسال کنید.', MAIN_MENU)
+                handled_private = True
+            if handled_private:
                 results.append('private-intake')
                 continue
         callback = u.get('callback_query')
@@ -489,6 +513,16 @@ def main():
                     tg_send(chat_id, f'✅ پیش‌نویس {label}.\nوضعیت جدید: {new_status}', MAIN_MENU)
             elif data == 'status':
                 tg_send(chat_id, '✅ کارخانه محتوا فعال است و کانال Base را در اجرای بعدی بررسی می‌کند.', MAIN_MENU)
+            elif data == 'health':
+                tg_send(chat_id, health_report(st), CONTROL_MENU)
+            elif data == 'errors':
+                failures = st.get('failures', [])
+                if not failures:
+                    tg_send(chat_id, '🔁 صف خطا خالی است.', CONTROL_MENU)
+                else:
+                    lines = ['🔁 آخرین خطاهای قابل بررسی:']
+                    lines.extend(f"• {x.get('at','')} | update {x.get('update_id','')}\n  {x.get('error','')}" for x in failures[:8])
+                    tg_send(chat_id, '\n'.join(lines), CONTROL_MENU)
             elif data in ('intake', 'document', 'media', 'image'):
                 tg_send(chat_id, '📥 فایل یا متن آموزشی را همین‌جا ارسال کنید. پس از دریافت، پیش‌نویس مقاله، پادکست، ریلز و نسخه‌های پلتفرمی ساخته می‌شود.', MAIN_MENU)
             elif data in ('research', 'calendar'):
@@ -625,7 +659,12 @@ def main():
         if post:
             key = str(u['update_id'])
             if key not in st.get('seen', []):
-                results.append(handle_post(post)); st.setdefault('seen', []).append(key)
+                try:
+                    results.append(handle_post(post))
+                    st.setdefault('seen', []).append(key)
+                except Exception as exc:
+                    record_failure(st, u.get('update_id'), exc)
+                    results.append('failed:' + str(exc)[:80])
     if updates:
         state_save(st)
     print('content-agent', len(updates), results)
