@@ -98,6 +98,40 @@ def state_save(st):
     gh_put(STATE_PATH, json.dumps(st, ensure_ascii=False, indent=2), 'Update content agent state', SELF_REPO)
 
 
+def build_research(index):
+    topics = []
+    for item in index[:20]:
+        title = (item.get('title') or '').strip()
+        if title and title not in topics:
+            topics.append(title)
+    seeds = topics[:5] or ['مدیریت ریسک در LIT', 'روانشناسی معامله‌گری', 'تحلیل ساختار بازار']
+    ideas = []
+    templates = [
+        ('اشتباهات رایج', 'اشتباهات رایج در موضوع «{topic}» و روش جلوگیری آموزشی از آن‌ها'),
+        ('چک‌لیست', 'چک‌لیست عملی و غیرسیگنالی برای بررسی «{topic}» قبل از تصمیم‌گیری'),
+        ('پرسش مخاطب', 'پاسخ آموزشی به پرسش‌های پرتکرار درباره «{topic}»'),
+        ('مقایسه مفهومی', 'تفاوت «{topic}» با برداشت‌های نادرست رایج در میان معامله‌گران'),
+        ('مطالعه موردی', 'مطالعه موردی آموزشی درباره «{topic}» بدون تضمین نتیجه معاملاتی'),
+    ]
+    for i, topic in enumerate(seeds):
+        kind, title = templates[i % len(templates)]
+        ideas.append({'title': title.format(topic=topic), 'format': kind,
+                      'source_topic': topic, 'status': 'idea',
+                      'risk_note': 'صرفاً آموزشی؛ بدون سیگنال و تضمین سود'})
+    return {'generated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'ideas': ideas}
+
+
+def build_calendar(index):
+    ideas = build_research(index)['ideas']
+    formats = ['مقاله سایت', 'پست تلگرام', 'ریلز آموزشی', 'پادکست کوتاه', 'پست لینکدین', 'استوری پرسش‌وپاسخ', 'مرور هفتگی']
+    days = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه']
+    entries = []
+    for i, day in enumerate(days):
+        idea = ideas[i % len(ideas)]
+        entries.append({'day': day, 'format': formats[i], 'title': idea['title'], 'status': 'planned'})
+    return {'generated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'entries': entries}
+
+
 def file_bytes(file_id):
     f = tg('getFile', {'file_id': file_id})['result']['file_path']
     return http('https://api.telegram.org/file/bot' + TOKEN + '/' + f, timeout=180)
@@ -277,8 +311,20 @@ def main():
             elif data in ('intake', 'document', 'media', 'image'):
                 tg_send(chat_id, '📥 فایل یا متن آموزشی را همین‌جا ارسال کنید. پس از دریافت، پیش‌نویس مقاله، پادکست، ریلز و نسخه‌های پلتفرمی ساخته می‌شود.', MAIN_MENU)
             elif data in ('research', 'calendar'):
-                label = 'تحقیق و ایده‌پردازی' if data == 'research' else 'تقویم محتوایی'
-                tg_send(chat_id, f'🛠 بخش «{label}» در مرحله بعد فعال می‌شود. فعلاً محتوای ورودی را از همین مرکز دریافت و به پیش‌نویس تبدیل کنید.', CONTROL_MENU)
+                index = load_index(lambda path: gh_text(path, SITE_REPO))
+                if data == 'research':
+                    report = build_research(index)
+                    put_json('content-control/research.json', report, 'Update content research ideas', SITE_REPO)
+                    lines = ['🔎 ایده‌های تحقیق و تولید محتوا:']
+                    lines.extend(f"{i + 1}. {x['title']}\n   قالب: {x['format']}" for i, x in enumerate(report['ideas']))
+                    lines.append('\n⚠️ همه ایده‌ها آموزشی هستند و سیگنال یا تضمین سود نیستند.')
+                    tg_send(chat_id, '\n'.join(lines), CONTROL_MENU)
+                else:
+                    calendar = build_calendar(index)
+                    put_json('content-control/calendar.json', calendar, 'Update weekly content calendar', SITE_REPO)
+                    lines = ['📅 تقویم محتوایی هفتگی:']
+                    lines.extend(f"• {x['day']}: {x['format']}\n  {x['title']}" for x in calendar['entries'])
+                    tg_send(chat_id, '\n'.join(lines), CONTROL_MENU)
             else:
                 tg_send(chat_id, '📚 برای پردازش محتوای جدید، آن را در کانال Base منتشر کنید.', MAIN_MENU)
             results.append('callback-' + data)
