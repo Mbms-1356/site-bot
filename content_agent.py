@@ -508,7 +508,11 @@ def main():
                     tg_send(chat_id, '⛔ این عملیات فقط برای مدیر مرکز محتوا فعال است.', MAIN_MENU)
                 else:
                     new_status = 'approved' if action == 'approve' else 'rejected'
-                    set_status(package, new_status, str(chat_id))
+                    try:
+                        set_status(package, new_status, str(chat_id))
+                    except ValueError as exc:
+                        tg_send(chat_id, '⛔ تأیید مسدود شد. ابتدا Quality Gate را اصلاح کنید.\n' + str(package.get('quality', {}).get('audit', {}).get('warnings', [])), MAIN_MENU)
+                        continue
                     save_package(package, lambda path: gh_text(path, SITE_REPO), lambda path, value, message: put_json(path, value, message, SITE_REPO))
                     label = 'تأیید شد' if new_status == 'approved' else 'رد شد'
                     tg_send(chat_id, f'✅ پیش‌نویس {label}.\nوضعیت جدید: {new_status}', MAIN_MENU)

@@ -3,6 +3,7 @@ import hashlib
 import re
 import time
 from typing import Any, Dict, List
+from quality_gate import audit_package
 
 PLATFORMS = ('website', 'podcast', 'instagram', 'telegram', 'whatsapp', 'tiktok', 'youtube', 'linkedin', 'x')
 
@@ -104,9 +105,13 @@ def make_package(article: Dict[str, Any], source_link: str, source_text: str,
 
 def score_package(package: Dict[str, Any]) -> int:
     checks = package.get('quality', {}).get('checks', {})
+    audit = audit_package(package)
+    checks['risk_language'] = audit['passed']
     passed = sum(bool(v) for v in checks.values())
     total = max(len(checks), 1)
     score = round(100 * passed / total)
     package.setdefault('quality', {})['score'] = score
-    package['quality']['needs_review'] = score < 90
+    package['quality']['audit'] = audit
+    package['quality']['needs_review'] = score < 90 or audit['blocked']
+    package['quality']['blocked'] = audit['blocked']
     return score

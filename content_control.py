@@ -78,6 +78,8 @@ def _load_list(fetch_json, path: str) -> List[Dict[str, Any]]:
 def set_status(package: Dict[str, Any], status: str, reviewer: str = '') -> Dict[str, Any]:
     if status not in ('draft', 'approved', 'rejected', 'published'):
         raise ValueError('invalid content status')
+    if status == 'approved' and package.get('quality', {}).get('blocked'):
+        raise ValueError('quality gate blocked approval')
     package['status'] = status
     package.setdefault('publishing', {})['approved_by'] = reviewer or None
     package['publishing']['approved_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()) if reviewer else None
