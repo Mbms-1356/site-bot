@@ -47,6 +47,9 @@ def make_package(article: Dict[str, Any], source_link: str, source_text: str,
     hashtag_text = ' '.join(tags)
     risk_notice = '⚠️ این محتوا صرفاً آموزشی است و توصیه معاملاتی یا تضمین سود نیست.'
     cta = 'برای آموزش کامل‌تر، مقاله و محتوای آموزشی Forexin را دنبال کنید.'
+    visual_prompt = (f'کاور آموزشی حرفه‌ای درباره «{title}» برای برند Forexin؛ فضای مالی مدرن، '
+                     'رنگ‌های سبز تیره و طلایی، نمودار انتزاعی بدون عدد جعلی، نورپردازی تمیز، '
+                     'بدون وعده سود، بدون سیگنال خرید یا فروش، بدون لوگوی ساختگی، فضای خالی امن برای تیتر فارسی.')
     hooks = [
         f'چرا بیشتر معامله‌گران در موضوع «{title}» اشتباه می‌کنند؟',
         f'قبل از تصمیم‌گیری درباره «{title}»، این نکته را بررسی کنید.',
@@ -68,8 +71,20 @@ def make_package(article: Dict[str, Any], source_link: str, source_text: str,
         'podcast': {'script': script, 'audio_url': audio_url},
         'short_video': {'hooks': hooks, 'script': script[:1800], 'duration_seconds': 45,
                         'caption_overlay': title, 'cta': cta},
-        'visuals': {'cover_prompt': f'کاور آموزشی حرفه‌ای فارسی درباره {title}، سبک مدرن مالی، بدون وعده سود، فضای خوانا برای تیتر',
-                    'thumbnail_text': title[:48]},
+        'visuals': {
+            'status': 'draft_only',
+            'cover_prompt': visual_prompt,
+            'thumbnail_text': title[:48],
+            'alt_text': 'کاور آموزشی درباره ' + title,
+            'assets': {
+                'website_cover': {'width': 1200, 'height': 630, 'ratio': '1.91:1', 'prompt': visual_prompt},
+                'instagram_portrait': {'width': 1080, 'height': 1350, 'ratio': '4:5', 'prompt': visual_prompt},
+                'instagram_square': {'width': 1080, 'height': 1080, 'ratio': '1:1', 'prompt': visual_prompt},
+                'reels_story': {'width': 1080, 'height': 1920, 'ratio': '9:16', 'prompt': visual_prompt},
+                'youtube_thumbnail': {'width': 1280, 'height': 720, 'ratio': '16:9', 'prompt': visual_prompt},
+            },
+            'generation': {'provider': 'pending', 'approved_by': None, 'approved_at': None},
+        },
         'platforms': {
             'instagram': {'caption': excerpt + '\n\n' + cta + '\n\n' + risk_notice, 'hashtags': tags},
             'telegram': {'text': title + '\n\n' + excerpt + '\n\n' + cta + '\n\n' + risk_notice, 'hashtags': tags},

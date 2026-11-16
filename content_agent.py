@@ -444,7 +444,9 @@ def main():
                     text_out = ('👁 پیش‌نمایش پیش‌نویس\n\n' + str(article.get('title', 'بدون عنوان')) + '\n\n' +
                                 str(article.get('description', '')) + '\n\n' +
                                 'کلمات کلیدی: ' + ', '.join(map(str, article.get('keywords', []))) + '\n\n' +
-                                'وضعیت: ' + str(package.get('status', 'draft')))
+                                'وضعیت: ' + str(package.get('status', 'draft')) + '\n' +
+                                'کاورها: ' + str(len(package.get('visuals', {}).get('assets', {}))) + ' قالب آماده تولید\n' +
+                                'وضعیت کاور: ' + str(package.get('visuals', {}).get('status', 'pending')))
                     tg_send(chat_id, text_out[:3900], draft_keyboard({'id': package_id, 'status': package.get('status')}, is_content_admin(chat_id)))
                 elif not is_content_admin(chat_id):
                     tg_send(chat_id, '⛔ این عملیات فقط برای مدیر مرکز محتوا فعال است.', MAIN_MENU)
