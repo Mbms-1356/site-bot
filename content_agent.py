@@ -87,7 +87,13 @@ def gh_text(path, repo=SITE_REPO):
 
 
 def is_content_admin(chat_id):
-    return bool(CONTENT_ADMIN_CHAT_ID) and str(chat_id) == CONTENT_ADMIN_CHAT_ID
+    configured = CONTENT_ADMIN_CHAT_ID
+    if not configured:
+        try:
+            configured = str(json.loads(Path('admin.json').read_text()).get('id', '')).strip()
+        except Exception:
+            configured = ''
+    return bool(configured) and str(chat_id) == configured
 
 
 def draft_keyboard(item, admin=False):
