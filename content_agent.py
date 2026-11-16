@@ -271,6 +271,17 @@ def build_question_insights(rows):
             'policy': 'این خروجی فقط پیشنهاد است و خودکار منتشر یا فعال نمی‌شود.'}
 
 
+def candidate_keyboard(kind, candidate_id, admin):
+    if not admin:
+        return {'inline_keyboard': [[{'text': '👁 مشاهده', 'callback_data': f'candidate-view:{kind}:{candidate_id}'}]]}
+    return {'inline_keyboard': [[
+        {'text': '👁 مشاهده', 'callback_data': f'candidate-view:{kind}:{candidate_id}'},
+        {'text': '✅ تأیید', 'callback_data': f'candidate-approve:{kind}:{candidate_id}'},
+        {'text': '🚫 رد', 'callback_data': f'candidate-reject:{kind}:{candidate_id}'},
+        {'text': '🚀 فعال‌سازی', 'callback_data': f'candidate-activate:{kind}:{candidate_id}'},
+    ]]}
+
+
 def file_bytes(file_id):
     f = tg('getFile', {'file_id': file_id})['result']['file_path']
     return http('https://api.telegram.org/file/bot' + TOKEN + '/' + f, timeout=180)
@@ -543,16 +554,58 @@ def main():
                     unanswered = json.loads(gh_text('content-control/unanswered-questions.json', SITE_REPO) or '[]')
                 except Exception:
                     unanswered = []
+                try:
+                    previous = json.loads(gh_text('content-control/question-insights.json', SITE_REPO) or '{}')
+                except Exception:
+                    previous = {}
                 insights = build_question_insights(unanswered)
+                previous_status = {x.get('id'): x.get('status') for x in previous.get('faq_candidates', []) + previous.get('challenge_candidates', [])}
+                for group in ('faq_candidates', 'challenge_candidates'):
+                    for candidate in insights[group]:
+                        if candidate.get('id') in previous_status:
+                            candidate['status'] = previous_status[candidate['id']]
                 put_json('content-control/question-insights.json', insights, 'Update unanswered question insights', SITE_REPO)
                 top = insights['faq_candidates'][:5]
                 if top:
                     lines = ['📈 تحلیل سؤال‌های کاربران:', f"کل سؤال‌های ثبت‌شده: {insights['total_questions']}", '']
-                    lines.extend(f"{i + 1}. {x['question']} | اولویت: {x['priority']}" for i, x in enumerate(top))
+                    lines.extend(f"{i + 1}. {x['question']} | اولویت: {x['priority']} | {x['status']}" for i, x in enumerate(top))
                     lines.append('\n✅ از همین فهرست، کاندیدای FAQ و چالش ساخته شد؛ فعال‌سازی هنوز نیازمند بررسی مدیر است.')
                 else:
                     lines = ['📈 هنوز سؤال بی‌پاسخ ثبت نشده است.']
                 tg_send(chat_id, '\n'.join(lines), CONTROL_MENU)
+                for candidate in top:
+                    tg_send(chat_id, '❓ کاندیدای FAQ: ' + candidate['question'], candidate_keyboard('faq', candidate['id'], is_content_admin(chat_id)))
+                for candidate in insights['challenge_candidates'][:5]:
+                    tg_send(chat_id, '🎯 کاندیدای چالش: ' + candidate['question'] + '\nوضعیت: ' + candidate['status'], candidate_keyboard('challenge', candidate['id'], is_content_admin(chat_id)))
+            elif data.startswith('candidate-'):
+                parts = data.split(':', 2)
+                action, kind, candidate_id = parts[0], parts[1], parts[2] if len(parts) > 2 else ''
+                try:
+                    insights = json.loads(gh_text('content-control/question-insights.json', SITE_REPO) or '{}')
+                except Exception:
+                    insights = {}
+                group = 'faq_candidates' if kind == 'faq' else 'challenge_candidates'
+                candidate = next((x for x in insights.get(group, []) if str(x.get('id')) == candidate_id), None)
+                if not candidate:
+                    tg_send(chat_id, '⚠️ کاندیدا پیدا نشد؛ دوباره گزارش را بسازید.', CONTROL_MENU)
+                elif action == 'candidate-view':
+                    tg_send(chat_id, ('❓ ' if kind == 'faq' else '🎯 ') + candidate.get('question', '') + '\nوضعیت: ' + candidate.get('status', 'needs_review'), candidate_keyboard(kind, candidate_id, is_content_admin(chat_id)))
+                elif not is_content_admin(chat_id):
+                    tg_send(chat_id, '⛔ تغییر وضعیت فقط برای مدیر مجاز است.', CONTROL_MENU)
+                elif action == 'candidate-activate' and candidate.get('status') != 'approved':
+                    tg_send(chat_id, '⚠️ ابتدا باید کاندیدا تأیید شود؛ سپس فعال‌سازی انجام می‌شود.', CONTROL_MENU)
+                else:
+                    candidate['status'] = 'approved' if action == 'candidate-approve' else 'rejected'
+                    if action == 'candidate-activate':
+                        candidate['status'] = 'active'
+                    candidate['reviewed_by'] = str(chat_id)
+                    candidate['reviewed_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+                    put_json('content-control/question-insights.json', insights, 'Review FAQ or challenge candidate')
+                    if action == 'candidate-activate':
+                        active_path = 'content-control/active-faq.json' if kind == 'faq' else 'content-control/active-challenges.json'
+                        active = [x for x in (insights.get(group, [])) if x.get('status') == 'active']
+                        put_json(active_path, active, 'Update active reviewed candidates')
+                    tg_send(chat_id, '✅ وضعیت کاندیدا ثبت شد: ' + candidate['status'], CONTROL_MENU)
             elif data == 'research-help':
                 tg_send(chat_id, '📚 راهنمای تحقیق:\n\n۱) ایده و تحقیق: موضوعات روز و لینک منابع عمومی.\n۲) تحلیل رقبا: مقایسه منابع عمومی رقبای تنظیم‌شده.\n۳) تقویم محتوا: برنامه هفتگی از ایده‌های ثبت‌شده.\n\nهمه خروجی‌ها قبل از انتشار باید بررسی و بازنویسی شوند.', CONTROL_MENU)
             else:
