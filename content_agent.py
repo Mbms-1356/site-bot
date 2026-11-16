@@ -46,6 +46,8 @@ CONTROL_MENU = {'inline_keyboard': [
     [{'text': '🎙 صوت / ویدئو', 'callback_data': 'media'}, {'text': '🖼 عکس و کاور', 'callback_data': 'image'}],
     [{'text': '📝 پیش‌نویس‌ها', 'callback_data': 'drafts'}, {'text': '📊 گزارش مرکز کنترل', 'callback_data': 'control'}],
     [{'text': '🔎 ایده و تحقیق', 'callback_data': 'research'}, {'text': '📅 تقویم محتوا', 'callback_data': 'calendar'}],
+    [{'text': '🚀 شروع /start', 'callback_data': 'main'}, {'text': '🔄 وضعیت /status', 'callback_data': 'status'}],
+    [{'text': '📊 کنترل /control', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس /drafts', 'callback_data': 'drafts'}],
     [{'text': 'ℹ️ راهنمای کامل', 'callback_data': 'help'}, {'text': '🔙 منوی اصلی', 'callback_data': 'main'}],
 ]}
 
