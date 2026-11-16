@@ -24,8 +24,17 @@ def tg(method, params=None):
     return json.loads(http(API + '/' + method + q, headers={'User-Agent': 'ForexinContentAgent'}))
 
 
-def tg_send(chat_id, text):
-    return tg('sendMessage', {'chat_id': chat_id, 'text': text})
+def tg_send(chat_id, text, keyboard=None):
+    params = {'chat_id': chat_id, 'text': text}
+    if keyboard:
+        params['reply_markup'] = json.dumps(keyboard, ensure_ascii=False)
+    return tg('sendMessage', params)
+
+
+MAIN_MENU = {'inline_keyboard': [
+    [{'text': '📊 وضعیت کارخانه', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس‌ها', 'callback_data': 'drafts'}],
+    [{'text': '📚 راهنمای کار', 'callback_data': 'help'}, {'text': '🔄 بررسی کانال Base', 'callback_data': 'status'}],
+]}
 
 
 def gh_json(path, repo=SITE_REPO):
@@ -201,6 +210,7 @@ def main():
             text = (msg.get('text') or '').strip().lower()
             if text in ('/start', '/help'):
                 tg_send(msg['chat']['id'], '🦁 کارخانه محتوای Forexin فعال است.\n\n✅ پست‌های جدید کانال Base را دریافت می‌کنم.\n🎬 ویدئو و صوت را به متن تبدیل می‌کنم.\n📰 مقاله آموزشی و سئوشده می‌سازم.\n🔊 نسخه صوتی پادکست را آماده می‌کنم.\n\n⚠️ این ربات برای پردازش خودکار محتوای کانال Base است؛ محتوای جدید را در همان کانال منتشر کنید.')
+                tg_send(msg['chat']['id'], 'یکی از گزینه‌های زیر را انتخاب کنید:', MAIN_MENU)
                 results.append('private-start')
                 continue
             if text == '/status':
@@ -220,6 +230,22 @@ def main():
                         tg_send(msg['chat']['id'], '📝 هنوز بسته محتوایی ثبت نشده است.')
                 results.append('private-control')
                 continue
+        callback = u.get('callback_query')
+        if callback:
+            chat_id = callback.get('message', {}).get('chat', {}).get('id')
+            data = callback.get('data', '')
+            if data == 'control':
+                tg_send(chat_id, summary(load_index(lambda path: gh_text(path, SITE_REPO))), MAIN_MENU)
+            elif data == 'drafts':
+                rows = load_index(lambda path: gh_text(path, SITE_REPO))[:8]
+                text_out = '📝 هنوز پیش‌نویسی ثبت نشده است.' if not rows else '\n'.join(['📝 آخرین پیش‌نویس‌ها:'] + [f"• {x.get('title','بدون عنوان')} | {x.get('status','draft')} | امتیاز {x.get('score',0)}" for x in rows])
+                tg_send(chat_id, text_out, MAIN_MENU)
+            elif data == 'status':
+                tg_send(chat_id, '✅ کارخانه محتوا فعال است و کانال Base را در اجرای بعدی بررسی می‌کند.', MAIN_MENU)
+            else:
+                tg_send(chat_id, '📚 برای پردازش محتوای جدید، آن را در کانال Base منتشر کنید.', MAIN_MENU)
+            results.append('callback-' + data)
+            continue
         post = u.get('channel_post')
         if post:
             key = str(u['update_id'])
