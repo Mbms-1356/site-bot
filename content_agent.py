@@ -50,6 +50,7 @@ CONTROL_MENU = {'inline_keyboard': [
     [{'text': '🔎 ایده و تحقیق', 'callback_data': 'research'}, {'text': '👥 تحلیل رقبا', 'callback_data': 'competitors'}],
     [{'text': '📅 تقویم محتوا', 'callback_data': 'calendar'}, {'text': '📚 راهنمای تحقیق', 'callback_data': 'research-help'}],
     [{'text': '📣 رشد قانونی مخاطب', 'callback_data': 'growth'}],
+    [{'text': '🗂 آرشیو دارایی‌ها', 'callback_data': 'archive'}, {'text': '🧠 دانش چت‌بات', 'callback_data': 'knowledge'}],
     [{'text': '🚀 شروع /start', 'callback_data': 'main'}, {'text': '🔄 وضعیت /status', 'callback_data': 'status'}],
     [{'text': '📊 کنترل /control', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس /drafts', 'callback_data': 'drafts'}],
     [{'text': 'ℹ️ راهنمای کامل', 'callback_data': 'help'}, {'text': '🔙 منوی اصلی', 'callback_data': 'main'}],
@@ -506,6 +507,18 @@ def main():
                 lines.extend('• ' + x['channel'] + ': ' + x['action'] for x in plan['actions'])
                 lines.append('\n⚠️ ' + plan['disclaimer'])
                 tg_send(chat_id, '\n'.join(lines), CONTROL_MENU)
+            elif data in ('archive', 'knowledge'):
+                path = 'content-control/archive/index.json' if data == 'archive' else 'content-control/knowledge/index.json'
+                try:
+                    records = json.loads(gh_text(path, SITE_REPO) or '[]')
+                except Exception:
+                    records = []
+                if data == 'archive':
+                    usable = sum(1 for x in records if x.get('status') in ('approved', 'published'))
+                    tg_send(chat_id, f'🗂 آرشیو مرکزی\n\nتعداد بسته‌ها: {len(records)}\nدارایی‌های تأییدشده: {usable}\n\nآرشیو شامل مقاله، کپشن، هشتگ، پادکست، پرامپت کاور و قالب‌های تصویری است.', CONTROL_MENU)
+                else:
+                    safe = sum(1 for x in records if x.get('safe_for_assistant'))
+                    tg_send(chat_id, f'🧠 نمایه دانش چت‌بات\n\nکل مدخل‌ها: {len(records)}\nمجاز برای پاسخ‌گویی: {safe}\n\nچت‌بات فقط از محتوای تأییدشده یا منتشرشده استفاده می‌کند و منابع نامعتبر را قطعی بیان نمی‌کند.', CONTROL_MENU)
             elif data == 'research-help':
                 tg_send(chat_id, '📚 راهنمای تحقیق:\n\n۱) ایده و تحقیق: موضوعات روز و لینک منابع عمومی.\n۲) تحلیل رقبا: مقایسه منابع عمومی رقبای تنظیم‌شده.\n۳) تقویم محتوا: برنامه هفتگی از ایده‌های ثبت‌شده.\n\nهمه خروجی‌ها قبل از انتشار باید بررسی و بازنویسی شوند.', CONTROL_MENU)
             else:
