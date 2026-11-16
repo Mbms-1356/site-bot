@@ -1,10 +1,11 @@
 """Private Telegram intake orchestration for the content factory."""
+import hashlib
 from content_package import make_package, score_package
 from content_control import save_package
 from file_intake import classify, extract_text, ocr_image
 
 
-def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_text, put_json, tg_send, menu):
+def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_text, put_json, tg_send, menu, put_binary=None):
     chat_id = msg.get('chat', {}).get('id')
     if not chat_id:
         return False
@@ -42,6 +43,14 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
         return True
     category = classify(name, kind)
     if category == 'image':
+        media_path = ''
+        if put_binary:
+            digest = hashlib.sha256(data).hexdigest()[:20]
+            media_path = f'media/uploads/{digest}.jpg'
+            try:
+                put_binary(media_path, data, 'Archive original educational image')
+            except Exception:
+                media_path = ''
         extracted = ocr_image(data, name)
         if not extracted:
             tg_send(chat_id, '⚠️ عکس دریافت شد، اما متن خوانایی برای OCR پیدا نشد. لطفاً عکس واضح‌تر یا فایل اصلی را ارسال کنید.', menu)
@@ -55,6 +64,9 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
         package = make_package(article, '', source, '')
         package.setdefault('source', {})['type'] = 'image-ocr'
         package['source']['ocr_text'] = extracted[:12000]
+        if media_path:
+            package['source']['media_path'] = media_path
+            package['source']['media_url'] = 'https://mbms-1356.github.io/forexin-site-/' + media_path
         score_package(package)
         save_package(package, lambda path: gh_text(path), lambda path, value, message: put_json(path, value, message))
         tg_send(chat_id, f"✅ عکس با OCR خوانده شد و پیش‌نویس ساخته شد.\n🔎 متن استخراج‌شده: {len(extracted)} کاراکتر\n📊 امتیاز: {package['quality']['score']}", menu)

@@ -458,7 +458,8 @@ def main():
             try:
                 handled_private = process_private_upload(msg, st, file_bytes, transcribe, make_article, lambda path: gh_text(path, SITE_REPO),
                                       lambda path, value, message: put_json(path, value, message, SITE_REPO),
-                                      tg_send, MAIN_MENU)
+                                      tg_send, MAIN_MENU,
+                                      lambda path, data, message: gh_put(path, data, message, SITE_REPO, binary=True))
             except Exception as exc:
                 record_failure(st, u.get('update_id'), exc)
                 tg_send(msg['chat']['id'], '⚠️ پردازش این فایل ناموفق شد و خطا برای بررسی ثبت شد. لطفاً دوباره ارسال کنید.', MAIN_MENU)
