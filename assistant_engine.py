@@ -1,9 +1,15 @@
 import json
+import base64
+import os
 import re
+import requests
 from difflib import SequenceMatcher
 from pathlib import Path
 
 CONTENT_PATH = Path('content/challenges.json')
+KNOWLEDGE_PATH = os.environ.get('KNOWLEDGE_PATH', 'content-control/knowledge/index.json')
+KNOWLEDGE_REPO = os.environ.get('KNOWLEDGE_REPO', 'Mbms-1356/forexin-site-')
+GH_TOKEN = os.environ.get('GH_TOKEN', os.environ.get('GH_PAT', '')).strip()
 
 
 def _norm(text):
@@ -18,11 +24,37 @@ def _questions():
         return []
 
 
+def _knowledge():
+    local = Path(KNOWLEDGE_PATH)
+    if local.exists():
+        try:
+            return json.loads(local.read_text(encoding='utf-8'))
+        except Exception:
+            pass
+    if not GH_TOKEN:
+        return []
+    try:
+        url = f'https://api.github.com/repos/{KNOWLEDGE_REPO}/contents/{KNOWLEDGE_PATH}'
+        response = requests.get(url, headers={'Authorization': f'Bearer {GH_TOKEN}', 'Accept': 'application/vnd.github+json'}, timeout=15)
+        if not response.ok:
+            return []
+        return json.loads(base64.b64decode(response.json().get('content', '')).decode('utf-8'))
+    except Exception:
+        return []
+
+
 def answer_question(text):
     query = _norm(text)
     if len(query) < 3:
         return {'matched': False, 'text': 'لطفاً سؤال کامل‌تری درباره LIT، مدیریت ریسک، سشن‌ها یا آموزش بازار بنویسید.'}
     rows = _questions()
+    for item in _knowledge():
+        if not item.get('safe_for_assistant'):
+            continue
+        rows.append({'id': item.get('id'), 'category': item.get('category', 'آموزش آرشیو'),
+                     'question': item.get('title', ''), 'explanation': item.get('text', ''),
+                     'tip': 'این پاسخ از محتوای آموزشی تأییدشده آرشیو استخراج شده است.',
+                     'related_url': item.get('source_url', '') or 'https://mbms-1356.github.io/forexin-site-/learn.html'})
     query_words = set(query.split())
     scored = []
     for q in rows:

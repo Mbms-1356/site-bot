@@ -8,10 +8,12 @@ from pathlib import Path
 import requests
 
 REPO = os.environ.get('GH_REPO', 'Mbms-1356/site-bot')
-GH_TOKEN = os.environ.get('GH_TOKEN', '').strip()
+GH_TOKEN = os.environ.get('GH_TOKEN', os.environ.get('GH_PAT', '')).strip()
 NAMESPACE = os.environ.get('CHALLENGE_NAMESPACE', 'default')
 STATE_PATH = Path(os.environ.get('CHALLENGE_STATE_FILE', f'challenge_state_{NAMESPACE}.json'))
 CONTENT_PATH = Path('content/challenges.json')
+KNOWLEDGE_PATH = os.environ.get('KNOWLEDGE_PATH', 'content-control/knowledge/index.json')
+KNOWLEDGE_REPO = os.environ.get('KNOWLEDGE_REPO', 'Mbms-1356/forexin-site-')
 TEHRAN = timezone(timedelta(hours=3, minutes=30))
 
 
@@ -20,6 +22,44 @@ def _load(path, default):
         return json.loads(path.read_text(encoding='utf-8'))
     except Exception:
         return default
+
+
+def _knowledge_questions():
+    """Create deterministic practice questions from approved archive entries."""
+    rows = []
+    try:
+        if Path(KNOWLEDGE_PATH).exists():
+            rows = _load(Path(KNOWLEDGE_PATH), [])
+        elif GH_TOKEN:
+            url = f'https://api.github.com/repos/{KNOWLEDGE_REPO}/contents/{KNOWLEDGE_PATH}'
+            response = requests.get(url, headers={'Authorization': f'Bearer {GH_TOKEN}', 'Accept': 'application/vnd.github+json'}, timeout=15)
+            if response.ok:
+                rows = json.loads(base64.b64decode(response.json().get('content', '')).decode('utf-8'))
+    except Exception:
+        rows = []
+    questions = []
+    for row in rows:
+        if not row.get('safe_for_assistant') or not row.get('title') or not row.get('text'):
+            continue
+        source_id = str(row.get('id', row.get('title')))
+        digest = hashlib.sha256(source_id.encode()).hexdigest()[:12]
+        title = str(row['title'])
+        category = str(row.get('category', 'آموزش آرشیو'))
+        questions.append({'id': 'archive-' + digest, 'category': category, 'difficulty': 'متوسط',
+                          'question': f'نکته اصلی آموزشی در «{title}» چیست؟',
+                          'options': ['بررسی ساختار و مدیریت ریسک بر اساس آموزش', 'تضمین سود بدون برنامه', 'نادیده‌گرفتن حد ضرر', 'تصمیم‌گیری بدون تحلیل'],
+                          'correct': 0,
+                          'explanation': str(row['text'])[:1200],
+                          'tip': 'پاسخ آموزشی است؛ هیچ نتیجه معاملاتی تضمین‌شده نیست.',
+                          'related_url': row.get('source_url', '')})
+    return questions
+
+
+def _all_questions():
+    base = _load(CONTENT_PATH, [])
+    generated = _knowledge_questions()
+    seen = {q.get('id') for q in base}
+    return base + [q for q in generated if q.get('id') not in seen]
 
 
 def _save_to_github():
@@ -68,7 +108,7 @@ def _pick(uid, state, questions):
 
 def get_daily(uid):
     state = _state()
-    questions = _load(CONTENT_PATH, [])
+    questions = _all_questions()
     if not questions:
         return None
     q = _pick(uid, state, questions)
@@ -78,7 +118,7 @@ def get_daily(uid):
 
 def answer(uid, qid, option):
     state = _state()
-    questions = _load(CONTENT_PATH, [])
+    questions = _all_questions()
     q = next((x for x in questions if x['id'] == qid), None)
     if not q:
         return None
@@ -110,7 +150,7 @@ def profile(uid):
 
 def report(limit=10):
     state = _state()
-    questions = {q['id']: q for q in _load(CONTENT_PATH, [])}
+    questions = {q['id']: q for q in _all_questions()}
     users = state.get('users', {})
     rows = []
     category = {}
