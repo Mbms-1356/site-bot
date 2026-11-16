@@ -48,6 +48,7 @@ CONTROL_MENU = {'inline_keyboard': [
     [{'text': '📝 پیش‌نویس‌ها', 'callback_data': 'drafts'}, {'text': '📊 گزارش مرکز کنترل', 'callback_data': 'control'}],
     [{'text': '🔎 ایده و تحقیق', 'callback_data': 'research'}, {'text': '👥 تحلیل رقبا', 'callback_data': 'competitors'}],
     [{'text': '📅 تقویم محتوا', 'callback_data': 'calendar'}, {'text': '📚 راهنمای تحقیق', 'callback_data': 'research-help'}],
+    [{'text': '📣 رشد قانونی مخاطب', 'callback_data': 'growth'}],
     [{'text': '🚀 شروع /start', 'callback_data': 'main'}, {'text': '🔄 وضعیت /status', 'callback_data': 'status'}],
     [{'text': '📊 کنترل /control', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس /drafts', 'callback_data': 'drafts'}],
     [{'text': 'ℹ️ راهنمای کامل', 'callback_data': 'help'}, {'text': '🔙 منوی اصلی', 'callback_data': 'main'}],
@@ -182,6 +183,48 @@ def competitor_report(config):
         report['competitors'].append({'name': name, 'platform': competitor.get('platform', 'public-web'), 'query': query, 'items': articles,
                                       'content_gap_prompt': f'چه زاویه آموزشی متفاوتی برای موضوعات «{name}» می‌توان تولید کرد؟'})
     return report
+
+
+def discover_competitors():
+    """Discover public publishers from RSS only; never collect follower identities."""
+    queries = ['فارکس آموزش', 'مدیریت سرمایه فارکس', 'استراتژی LIT', 'روانشناسی ترید']
+    candidates = {}
+    for query in queries:
+        url = 'https://news.google.com/rss/search?q=' + urllib.parse.quote(query) + '&hl=fa&gl=IR&ceid=IR:fa'
+        try:
+            root = ET.fromstring(http(url, timeout=20))
+        except Exception:
+            continue
+        for item in root.findall('./channel/item')[:10]:
+            source = item.find('source')
+            name = (source.text or '').strip() if source is not None else ''
+            link = (item.findtext('link') or '').strip()
+            title = (item.findtext('title') or '').strip()
+            if not name:
+                name = urllib.parse.urlparse(link).netloc
+            if not name:
+                continue
+            row = candidates.setdefault(name, {'name': name, 'platform': 'public-web', 'queries': [], 'examples': []})
+            if query not in row['queries']:
+                row['queries'].append(query)
+            if title and link and len(row['examples']) < 3:
+                row['examples'].append({'title': title, 'source_url': link})
+    return {'generated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            'candidates': sorted(candidates.values(), key=lambda x: len(x['queries']), reverse=True)[:20],
+            'note': 'این فهرست فقط از منابع عمومی ساخته شده و قبل از فعال‌سازی نیاز به بررسی انسانی دارد.'}
+
+
+def growth_plan():
+    return {
+        'principles': ['رضایت کاربر', 'عدم پیام انبوه', 'عدم استخراج فهرست اعضا', 'ارزش آموزشی قبل از دعوت'],
+        'actions': [
+            {'channel': 'SEO', 'action': 'ساخت مقاله‌های متمایز بر اساس شکاف محتوایی و دعوت اختیاری به کانال رایگان'},
+            {'channel': 'Social', 'action': 'انتشار ریلز و پاسخ‌های آموزشی در صفحات عمومی، بدون تبلیغ مزاحم یا کپی محتوا'},
+            {'channel': 'Lead magnet', 'action': 'ارائه چک‌لیست مدیریت ریسک یا درس رایگان با عضویت اختیاری و قابل لغو'},
+            {'channel': 'Measurement', 'action': 'استفاده از لینک‌های UTM و گزارش تعداد کلیک، عضویت و تبدیل بدون ذخیره اطلاعات حساس'},
+        ],
+        'disclaimer': 'هیچ کاربر رقیب به‌صورت خودکار شناسایی، پیام‌دهی یا دعوت نمی‌شود.'
+    }
 
 
 def file_bytes(file_id):
@@ -389,12 +432,25 @@ def main():
                 report = competitor_report(config)
                 put_json('content-control/competitors-report.json', report, 'Update competitor research report', SITE_REPO)
                 if not report['competitors']:
-                    tg_send(chat_id, '👥 تحلیل رقبا آماده است، اما هنوز فهرست رقیب تنظیم نشده است.\n\nلطفاً ۳ تا ۵ نام، لینک کانال، صفحه یا سایت رقیب را در فایل competitors.json وارد کنید؛ سپس این دکمه گزارش منابع عمومی و شکاف‌های محتوایی را می‌سازد.', CONTROL_MENU)
+                    discovered = discover_competitors()
+                    put_json('content-control/discovered-competitors.json', discovered, 'Update discovered public competitors', SITE_REPO)
+                    if discovered['candidates']:
+                        names = '\n'.join('• ' + x['name'] + ' (' + str(len(x['queries'])) + ' موضوع)' for x in discovered['candidates'][:8])
+                        tg_send(chat_id, '👥 فهرست اولیه منابع عمومی پیدا شد:\n\n' + names + '\n\nاین‌ها هنوز رقیب تأییدشده نیستند؛ برای جلوگیری از خطا، ابتدا بررسی انسانی لازم است.', CONTROL_MENU)
+                    else:
+                        tg_send(chat_id, '👥 فهرست رقبا هنوز تنظیم نشده و منبع عمومی قابل‌اعتمادی پیدا نشد. نام ۳ تا ۵ رقیب یا عبارت جست‌وجوی آن‌ها را در competitors.json وارد کنید.', CONTROL_MENU)
                 else:
                     lines = ['👥 گزارش تحلیل رقبا:']
                     lines.extend(f"• {x['name']} ({x['platform']}): {len(x['items'])} مورد عمومی\n  فرصت: {x['content_gap_prompt']}" for x in report['competitors'])
                     lines.append('\n⚠️ این گزارش برای تحقیق است و هیچ محتوایی را کپی یا خودکار منتشر نمی‌کند.')
                     tg_send(chat_id, '\n'.join(lines), CONTROL_MENU)
+            elif data == 'growth':
+                plan = growth_plan()
+                put_json('content-control/audience-growth-plan.json', plan, 'Update compliant audience growth plan', SITE_REPO)
+                lines = ['📣 برنامه رشد قانونی مخاطب:', '']
+                lines.extend('• ' + x['channel'] + ': ' + x['action'] for x in plan['actions'])
+                lines.append('\n⚠️ ' + plan['disclaimer'])
+                tg_send(chat_id, '\n'.join(lines), CONTROL_MENU)
             elif data == 'research-help':
                 tg_send(chat_id, '📚 راهنمای تحقیق:\n\n۱) ایده و تحقیق: موضوعات روز و لینک منابع عمومی.\n۲) تحلیل رقبا: مقایسه منابع عمومی رقبای تنظیم‌شده.\n۳) تقویم محتوا: برنامه هفتگی از ایده‌های ثبت‌شده.\n\nهمه خروجی‌ها قبل از انتشار باید بررسی و بازنویسی شوند.', CONTROL_MENU)
             else:
