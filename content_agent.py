@@ -2,7 +2,7 @@ import base64, html, io, json, os, re, subprocess, tempfile, time, urllib.parse,
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from content_package import make_package, score_package
-from content_control import load_index, save_package, summary
+from content_control import draft_path, load_index, save_package, set_status, summary
 from file_intake import classify, extract_text
 from private_intake import process_private_upload
 
@@ -10,6 +10,7 @@ TOKEN = os.environ.get('TOKEN_CONTENT_AGENT', '').strip()
 PAT = os.environ.get('GH_PAT', '').strip()
 GROQ = os.environ.get('GROQ_KEY', '').strip()
 OPENROUTER = os.environ.get('OPENROUTER_KEY', '').strip()
+CONTENT_ADMIN_CHAT_ID = os.environ.get('CONTENT_ADMIN_CHAT_ID', '').strip()
 SITE_REPO = 'Mbms-1356/forexin-site-'
 SELF_REPO = os.environ.get('GITHUB_REPOSITORY', 'Mbms-1356/site-bot')
 BASE_NAMES = {'forexin_turkaslani_base', 'forexinturkaslanibase'}
@@ -83,6 +84,23 @@ def gh_text(path, repo=SITE_REPO):
         return base64.b64decode(item['content']).decode('utf-8')
     except Exception:
         return ''
+
+
+def is_content_admin(chat_id):
+    return bool(CONTENT_ADMIN_CHAT_ID) and str(chat_id) == CONTENT_ADMIN_CHAT_ID
+
+
+def draft_keyboard(item, admin=False):
+    package_id = str(item.get('id', ''))
+    if not package_id:
+        return None
+    buttons = [[{'text': '👁 مشاهده', 'callback_data': 'view:' + package_id}]]
+    if admin:
+        buttons.append([
+            {'text': '✅ تأیید', 'callback_data': 'approve:' + package_id},
+            {'text': '🚫 رد', 'callback_data': 'reject:' + package_id},
+        ])
+    return {'inline_keyboard': buttons}
 
 
 def put_json(path, value, message, repo=SITE_REPO):
@@ -399,8 +417,37 @@ def main():
                 tg_send(chat_id, 'منوی اصلی:', MAIN_MENU)
             elif data == 'drafts':
                 rows = load_index(lambda path: gh_text(path, SITE_REPO))[:8]
-                text_out = '📝 هنوز پیش‌نویسی ثبت نشده است.' if not rows else '\n'.join(['📝 آخرین پیش‌نویس‌ها:'] + [f"• {x.get('title','بدون عنوان')} | {x.get('status','draft')} | امتیاز {x.get('score',0)}" for x in rows])
-                tg_send(chat_id, text_out, MAIN_MENU)
+                if not rows:
+                    tg_send(chat_id, '📝 هنوز پیش‌نویسی ثبت نشده است.', MAIN_MENU)
+                else:
+                    tg_send(chat_id, '📝 آخرین پیش‌نویس‌ها:', MAIN_MENU)
+                    for row in rows:
+                        text_out = f"• {row.get('title','بدون عنوان')}\nوضعیت: {row.get('status','draft')} | امتیاز: {row.get('score',0)}"
+                        tg_send(chat_id, text_out, draft_keyboard(row, is_content_admin(chat_id)))
+            elif data.startswith(('view:', 'approve:', 'reject:')):
+                action, package_id = data.split(':', 1)
+                raw = gh_text(draft_path(package_id), SITE_REPO)
+                try:
+                    package = json.loads(raw)
+                except Exception:
+                    package = None
+                if not package:
+                    tg_send(chat_id, '⚠️ پیش‌نویس پیدا نشد یا قابل خواندن نیست.', MAIN_MENU)
+                elif action == 'view':
+                    article = package.get('article', {})
+                    text_out = ('👁 پیش‌نمایش پیش‌نویس\n\n' + str(article.get('title', 'بدون عنوان')) + '\n\n' +
+                                str(article.get('description', '')) + '\n\n' +
+                                'کلمات کلیدی: ' + ', '.join(map(str, article.get('keywords', []))) + '\n\n' +
+                                'وضعیت: ' + str(package.get('status', 'draft')))
+                    tg_send(chat_id, text_out[:3900], draft_keyboard({'id': package_id, 'status': package.get('status')}, is_content_admin(chat_id)))
+                elif not is_content_admin(chat_id):
+                    tg_send(chat_id, '⛔ این عملیات فقط برای مدیر مرکز محتوا فعال است.', MAIN_MENU)
+                else:
+                    new_status = 'approved' if action == 'approve' else 'rejected'
+                    set_status(package, new_status, str(chat_id))
+                    save_package(package, lambda path: gh_text(path, SITE_REPO), lambda path, value, message: put_json(path, value, message, SITE_REPO))
+                    label = 'تأیید شد' if new_status == 'approved' else 'رد شد'
+                    tg_send(chat_id, f'✅ پیش‌نویس {label}.\nوضعیت جدید: {new_status}', MAIN_MENU)
             elif data == 'status':
                 tg_send(chat_id, '✅ کارخانه محتوا فعال است و کانال Base را در اجرای بعدی بررسی می‌کند.', MAIN_MENU)
             elif data in ('intake', 'document', 'media', 'image'):
