@@ -6,7 +6,7 @@ from telebot import types
 import yt_dlp
 import requests
 from challenge_engine import get_daily, answer as answer_challenge, profile as challenge_profile, report as challenge_report
-from assistant_engine import answer_question
+from assistant_engine import answer_question, record_unanswered
 from assistant_tts import synthesize_fa
 
 TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '').strip()
@@ -557,13 +557,17 @@ def txt(m):
             mk = types.InlineKeyboardMarkup(row_width=1)
             if result.get('url'):
                 mk.add(types.InlineKeyboardButton('📚 مطالعه مقاله مرتبط', url=result['url']))
+            for related in result.get('related', [])[:2]:
+                if related.get('url'):
+                    mk.add(types.InlineKeyboardButton('📖 ' + related.get('title', 'مطالب مرتبط')[:35], url=related['url']))
             answer_text = f"🤖 <b>پاسخ آموزشی</b>\n🏷 موضوع: {result['category']} | سطح: {result['difficulty']}\n\n{result['answer']}\n\n🛡 <b>نکته:</b> {result['tip']}\n\n⚠️ این پاسخ آموزشی است، نه توصیه معاملاتی."
             bot.send_message(m.chat.id, answer_text, reply_markup=mk)
             audio = synthesize_fa(result['answer'] + '\n' + result['tip'])
             if audio:
                 bot.send_audio(m.chat.id, audio, caption='🔊 پاسخ صوتی آموزشی از آرشیو تأییدشده')
         else:
-            bot.send_message(m.chat.id, '🤖 ' + result['text'])
+            record_unanswered(t)
+            bot.send_message(m.chat.id, '🤖 ' + result['text'] + '\n\n📝 سؤال شما برای تکمیل FAQ و آموزش‌های بعدی قابل بررسی است.')
         return
 
     if is_grp and is_link(t) and not ensure_admin(uid):

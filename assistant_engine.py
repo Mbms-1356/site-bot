@@ -3,6 +3,8 @@ import base64
 import os
 import re
 import requests
+import time
+import hashlib
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -10,6 +12,9 @@ CONTENT_PATH = Path('content/challenges.json')
 KNOWLEDGE_PATH = os.environ.get('KNOWLEDGE_PATH', 'content-control/knowledge/index.json')
 KNOWLEDGE_REPO = os.environ.get('KNOWLEDGE_REPO', 'Mbms-1356/forexin-site-')
 GH_TOKEN = os.environ.get('GH_TOKEN', os.environ.get('GH_PAT', '')).strip()
+_KNOWLEDGE_CACHE = {'at': 0.0, 'rows': []}
+UNANSWERED_REPO = os.environ.get('KNOWLEDGE_REPO', 'Mbms-1356/forexin-site-')
+UNANSWERED_PATH = 'content-control/unanswered-questions.json'
 
 
 def _norm(text):
@@ -25,10 +30,14 @@ def _questions():
 
 
 def _knowledge():
+    if time.time() - _KNOWLEDGE_CACHE['at'] < 300:
+        return _KNOWLEDGE_CACHE['rows']
     local = Path(KNOWLEDGE_PATH)
     if local.exists():
         try:
-            return json.loads(local.read_text(encoding='utf-8'))
+            rows = json.loads(local.read_text(encoding='utf-8'))
+            _KNOWLEDGE_CACHE.update(at=time.time(), rows=rows)
+            return rows
         except Exception:
             pass
     if not GH_TOKEN:
@@ -38,7 +47,9 @@ def _knowledge():
         response = requests.get(url, headers={'Authorization': f'Bearer {GH_TOKEN}', 'Accept': 'application/vnd.github+json'}, timeout=15)
         if not response.ok:
             return []
-        return json.loads(base64.b64decode(response.json().get('content', '')).decode('utf-8'))
+        rows = json.loads(base64.b64decode(response.json().get('content', '')).decode('utf-8'))
+        _KNOWLEDGE_CACHE.update(at=time.time(), rows=rows)
+        return rows
     except Exception:
         return []
 
@@ -67,8 +78,13 @@ def answer_question(text):
         scored.append((score, q))
     scored.sort(key=lambda item: item[0], reverse=True)
     score, q = scored[0]
+    related = []
+    for related_score, related_q in scored[:4]:
+        if related_q is q or related_score < 0.16:
+            continue
+        related.append({'title': related_q.get('question', ''), 'url': related_q.get('related_url', '')})
     if score < 0.22 or not (query_words & set(_norm(' '.join([q.get('question', ''), q.get('keywords', ''), q.get('explanation', '')])).split())):
-        return {'matched': False, 'text': 'برای این سؤال پاسخ مطمئن و مرتبطی در بانک آموزشی فعلی پیدا نکردم. لطفاً درباره LIT، نقدینگی، POI، Imbalance، مدیریت ریسک، سشن‌ها یا ژورنال سؤال کنید.'}
+        return {'matched': False, 'text': 'برای این سؤال پاسخ مطمئن و مرتبطی در بانک آموزشی فعلی پیدا نکردم. لطفاً درباره LIT، نقدینگی، POI، Imbalance، مدیریت ریسک، سشن‌ها یا ژورنال سؤال کنید.', 'related': related}
     return {
         'matched': True,
         'id': q.get('id'),
@@ -79,4 +95,29 @@ def answer_question(text):
         'tip': q.get('tip', ''),
         'url': q.get('related_url', 'https://mbms-1356.github.io/forexin-site-/learn.html'),
         'source': 'آرشیو آموزشی تأییدشده' if q.get('_archive') else 'بانک آموزشی',
+        'related': related,
     }
+
+
+def record_unanswered(text):
+    """Store a bounded, deduplicated queue for future FAQ/challenge curation."""
+    question = ' '.join((text or '').split())[:500]
+    if len(question) < 3 or not GH_TOKEN:
+        return False
+    try:
+        url = f'https://api.github.com/repos/{UNANSWERED_REPO}/contents/{UNANSWERED_PATH}'
+        headers = {'Authorization': f'Bearer {GH_TOKEN}', 'Accept': 'application/vnd.github+json', 'User-Agent': 'forexin-assistant'}
+        response = requests.get(url, headers=headers, timeout=15)
+        rows, sha = [], None
+        if response.ok:
+            body = response.json(); sha = body.get('sha')
+            rows = json.loads(base64.b64decode(body.get('content', '')).decode('utf-8'))
+        digest = hashlib.sha256(_norm(question).encode()).hexdigest()[:16]
+        if any(item.get('id') == digest for item in rows):
+            return True
+        rows.insert(0, {'id': digest, 'question': question, 'count': 1, 'last_seen': int(time.time()), 'status': 'needs_review'})
+        payload = {'message': 'Log unanswered assistant question', 'content': base64.b64encode(json.dumps(rows[:300], ensure_ascii=False, indent=2).encode()).decode()}
+        if sha: payload['sha'] = sha
+        return requests.put(url, headers={**headers, 'Content-Type': 'application/json'}, json=payload, timeout=20).ok
+    except Exception:
+        return False
