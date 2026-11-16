@@ -5,6 +5,10 @@ from content_package import make_package, score_package
 from content_control import draft_path, load_index, save_package, set_status, summary
 from file_intake import classify, extract_text
 from private_intake import process_private_upload
+from publishing_orchestrator import build_publish_queue
+from visual_asset_agent import build_asset_jobs
+from analytics_agent import build_report as build_analytics_report
+from github_app_auth import readiness as github_app_readiness
 
 TOKEN = os.environ.get('TOKEN_CONTENT_AGENT', '').strip()
 PAT = os.environ.get('GH_PAT', '').strip()
@@ -53,6 +57,8 @@ CONTROL_MENU = {'inline_keyboard': [
     [{'text': '🗂 آرشیو دارایی‌ها', 'callback_data': 'archive'}, {'text': '🧠 دانش چت‌بات', 'callback_data': 'knowledge'}],
     [{'text': '📈 تحلیل سؤال‌ها', 'callback_data': 'question-insights'}],
     [{'text': '🩺 سلامت سیستم', 'callback_data': 'health'}, {'text': '🔁 صف خطاها', 'callback_data': 'errors'}],
+    [{'text': '🚀 صف انتشار', 'callback_data': 'publishing'}, {'text': '🎨 دارایی بصری', 'callback_data': 'visual-assets'}],
+    [{'text': '📊 تحلیل عملکرد', 'callback_data': 'analytics'}, {'text': '🔐 آمادگی GitHub App', 'callback_data': 'github-app'}],
     [{'text': '🚀 شروع /start', 'callback_data': 'main'}, {'text': '🔄 وضعیت /status', 'callback_data': 'status'}],
     [{'text': '📊 کنترل /control', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس /drafts', 'callback_data': 'drafts'}],
     [{'text': 'ℹ️ راهنمای کامل', 'callback_data': 'help'}, {'text': '🔙 منوی اصلی', 'callback_data': 'main'}],
@@ -528,6 +534,24 @@ def main():
                     lines = ['🔁 آخرین خطاهای قابل بررسی:']
                     lines.extend(f"• {x.get('at','')} | update {x.get('update_id','')}\n  {x.get('error','')}" for x in failures[:8])
                     tg_send(chat_id, '\n'.join(lines), CONTROL_MENU)
+            elif data in ('publishing', 'visual-assets', 'analytics', 'github-app'):
+                index = load_index(lambda path: gh_text(path, SITE_REPO))
+                if data == 'publishing':
+                    report = build_publish_queue(index)
+                    put_json('content-control/publishing-queue.json', report, 'Update safe publishing queue', SITE_REPO)
+                    tg_send(chat_id, f"🚀 صف انتشار امن\n\nموارد آماده بررسی: {len(report['items'])}\nحالت فعلی: پیش‌نمایش امن\nانتشار خودکار شبکه‌های اجتماعی: خاموش\n\nبرای فعال‌سازی باید API پلتفرم و تأیید مدیر اضافه شود.", CONTROL_MENU)
+                elif data == 'visual-assets':
+                    report = build_asset_jobs(index)
+                    put_json('content-control/visual-asset-jobs.json', report, 'Update visual asset jobs', SITE_REPO)
+                    tg_send(chat_id, f"🎨 صف دارایی بصری\n\nتعداد بسته‌های آماده: {len(report['jobs'])}\nوضعیت: مانیفست و پرامپت آماده\nتولید واقعی فایل: در انتظار اتصال Canva یا سرویس تصویر\n\nهیچ تصویر بدون تأیید مدیر منتشر نمی‌شود.", CONTROL_MENU)
+                elif data == 'analytics':
+                    report = build_analytics_report(index)
+                    put_json('content-control/analytics.json', report, 'Update content analytics report', SITE_REPO)
+                    tg_send(chat_id, f"📊 تحلیل عملکرد محتوا\n\nکل بسته‌ها: {report['total_packages']}\nمیانگین امتیاز کیفیت: {report['average_quality_score']}\nوضعیت‌ها: {report['by_status']}\n\n{report['next_action']}", CONTROL_MENU)
+                else:
+                    report = github_app_readiness()
+                    put_json('content-control/github-app-readiness.json', report, 'Update GitHub App readiness', SITE_REPO)
+                    tg_send(chat_id, f"🔐 آمادگی GitHub App\n\nوضعیت: {'آماده' if report['ready'] else 'نیازمند تنظیم'}\nAPP ID: {'✅' if report['checks']['GITHUB_APP_ID'] else '❌'}\nPrivate Key: {'✅' if report['checks']['GITHUB_APP_PRIVATE_KEY'] else '❌'}\nInstallation ID: {'✅' if report['checks']['GITHUB_APP_INSTALLATION_ID'] else '❌'}\n\n{report['note']}", CONTROL_MENU)
             elif data in ('intake', 'document', 'media', 'image'):
                 tg_send(chat_id, '📥 فایل یا متن آموزشی را همین‌جا ارسال کنید. پس از دریافت، پیش‌نویس مقاله، پادکست، ریلز و نسخه‌های پلتفرمی ساخته می‌شود.', MAIN_MENU)
             elif data in ('research', 'calendar'):
