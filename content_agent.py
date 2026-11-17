@@ -4,6 +4,7 @@ from pathlib import Path
 from content_package import make_package, score_package
 from content_control import draft_path, load_index, save_package, set_status, summary
 from file_intake import classify, extract_text, ocr_image
+import drive_archive
 from private_intake import process_private_upload
 from publishing_orchestrator import build_publish_queue
 from visual_asset_agent import build_asset_jobs
@@ -524,7 +525,11 @@ def main():
                                       lambda path, value, message: put_json(path, value, message, SITE_REPO),
                                       tg_send, MAIN_MENU,
                                       lambda path, data, message: gh_put(path, data, message, SITE_REPO, binary=True),
-                                      vision_analyze)
+                                      vision_analyze,
+                                      lambda path, data, category: drive_archive.upload_bytes(path, data, {
+                                          'image': 'image/jpeg', 'audio': 'audio/mpeg', 'video': 'video/mp4'
+                                      }.get(category, 'application/octet-stream')),
+                                      drive_archive.upload_json)
             except Exception as exc:
                 record_failure(st, u.get('update_id'), exc)
                 tg_send(msg['chat']['id'], '⚠️ پردازش این فایل ناموفق شد و خطا برای بررسی ثبت شد. لطفاً دوباره ارسال کنید.', MAIN_MENU)

@@ -20,12 +20,14 @@ jobs:
       GITHUB_APP_ID: ${{ secrets.APP_ID_2026 }}
       GITHUB_APP_INSTALLATION_ID: ${{ secrets.APP_INSTALLATION_ID_2026 }}
       GITHUB_APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY_2026 }}
+      GOOGLE_DRIVE_ROOT_FOLDER_ID: ${{ secrets.DRIVE_ROOT_FOLDER_ID_2026 }}
+      GOOGLE_DRIVE_CREDENTIALS_JSON: ${{ secrets.DRIVE_CREDENTIALS_JSON_2026 }}
     steps:
       - uses: actions/checkout@v4
       - name: Install media tools
         run: |
           sudo apt-get update -y >/dev/null 2>&1
           sudo apt-get install -y ffmpeg tesseract-ocr tesseract-ocr-fas >/dev/null 2>&1
-          python3 -m pip install --quiet edge-tts pypdf PyJWT cryptography
+          python3 -m pip install --quiet edge-tts pypdf PyJWT cryptography google-api-python-client google-auth
       - name: Process Base channel content
         run: python3 content_agent.py

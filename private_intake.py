@@ -6,7 +6,7 @@ from content_control import save_package
 from file_intake import classify, extract_text, ocr_image
 
 
-def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_text, put_json, tg_send, menu, put_binary=None, analyze_image=None):
+def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_text, put_json, tg_send, menu, put_binary=None, analyze_image=None, drive_upload=None, drive_json=None):
     chat_id = msg.get('chat', {}).get('id')
     if not chat_id:
         return False
@@ -54,6 +54,12 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
             put_binary(media_path, data, 'Archive original ' + category + ' upload')
         except Exception:
             media_path = ''
+    drive_path = ''
+    if drive_upload and category in ('image', 'audio', 'video'):
+        suffix = Path(name or 'upload.bin').suffix.lower() or '.bin'
+        drive_result = drive_upload('01_Raw_Uploads/' + hashlib.sha256(data).hexdigest()[:20] + suffix, data, category)
+        if drive_result:
+            drive_path = drive_result.get('webViewLink') or drive_result.get('id', '')
     if category == 'image':
         extracted = ocr_image(data, name)
         visual_analysis = analyze_image(data, name) if analyze_image else ''
@@ -77,8 +83,12 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
         if media_path:
             package['source']['media_path'] = media_path
             package['source']['media_url'] = 'https://mbms-1356.github.io/forexin-site-/' + media_path
+        if drive_path:
+            package['source']['drive_url'] = drive_path
         score_package(package)
         save_package(package, lambda path: gh_text(path), lambda path, value, message: put_json(path, value, message))
+        if drive_json:
+            drive_json('05_Articles_SEO/' + package.get('id', 'package') + '.json', package)
         tg_send(chat_id, f"✅ عکس با OCR خوانده شد و پیش‌نویس ساخته شد.\n🔎 متن استخراج‌شده: {len(extracted)} کاراکتر\n📊 امتیاز: {package['quality']['score']}", menu)
         return True
     extracted = transcribe(data, name) if category in ('audio', 'video') else extract_text(data, name)
@@ -94,7 +104,11 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
         package.setdefault('source', {})['media_path'] = media_path
         package['source']['media_url'] = 'https://mbms-1356.github.io/forexin-site-/' + media_path
         package['source']['media_type'] = category
+    if drive_path:
+        package['source']['drive_url'] = drive_path
     score_package(package)
     save_package(package, lambda path: gh_text(path), lambda path, value, message: put_json(path, value, message))
+    if drive_json:
+        drive_json('05_Articles_SEO/' + package.get('id', 'package') + '.json', package)
     tg_send(chat_id, f"✅ فایل دریافت و پیش‌نویس ساخته شد.\n📄 نوع: {category}\n📊 امتیاز: {package['quality']['score']}", menu)
     return True
