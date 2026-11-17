@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from content_package import make_package, score_package
 from content_control import draft_path, load_index, save_package, set_status, summary
-from file_intake import classify, extract_text
+from file_intake import classify, extract_text, ocr_image
 from private_intake import process_private_upload
 from publishing_orchestrator import build_publish_queue
 from visual_asset_agent import build_asset_jobs
@@ -389,7 +389,7 @@ def handle_post(post):
     username = (chat.get('username') or '').lower()
     if username not in BASE_NAMES: return 'ignored-channel'
     caption = post.get('caption', '') or post.get('text', '')
-    media = None; name = 'media.bin'
+    media = None; name = 'media.bin'; image_text = ''
     if post.get('video'):
         media = file_bytes(post['video']['file_id']); name = 'video.mp4'
     elif post.get('audio'):
@@ -400,10 +400,14 @@ def handle_post(post):
         doc = post['document']; n = (doc.get('file_name') or '').lower()
         if any(n.endswith(x) for x in ('.mp3','.m4a','.wav','.ogg','.mp4','.mov','.mkv')):
             media = file_bytes(doc['file_id']); name = doc.get('file_name', name)
+    elif post.get('photo'):
+        media = file_bytes(post['photo'][-1]['file_id'])
+        name = 'channel-image.jpg'
+        image_text = ocr_image(media, name)
     transcript = transcribe(media, name) if media else ''
     source_link = 'https://t.me/' + (chat.get('username') or '') + '/' + str(post.get('message_id'))
-    source = caption or 'آموزش منتشرشده در کانال Base Forexin'
-    if not transcript and not caption: return 'no-text'
+    source = caption or image_text or 'آموزش منتشرشده در کانال Base Forexin'
+    if not transcript and not caption and not image_text: return 'no-text'
     article = make_article(source, transcript)
     if not article: return 'generation-failed'
     slug = slugify(article.get('slug'))
@@ -423,7 +427,14 @@ def handle_post(post):
     items = [x for x in items if x.get('slug') != slug]
     items.insert(0, {'slug': slug, 'title': article.get('title',''), 'description': article.get('description',''), 'url': 'articles/' + slug + '.html', 'audio': audio_url, 'source': source_link, 'published_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})
     gh_put('articles/index.json', json.dumps(items[:200], ensure_ascii=False, indent=2), 'Update article index')
-    package = make_package(article, source_link, source, transcript, audio_url)
+    package = make_package(article, source_link, source, transcript or image_text, audio_url)
+    if media and name == 'channel-image.jpg':
+        media_path = 'media/uploads/' + __import__('hashlib').sha256(media).hexdigest()[:20] + '.jpg'
+        gh_put(media_path, media, 'Archive Base channel image: ' + slug, SITE_REPO, binary=True)
+        package.setdefault('source', {})['type'] = 'channel-image-ocr'
+        package['source']['media_path'] = media_path
+        package['source']['media_url'] = 'https://mbms-1356.github.io/forexin-site-/' + media_path
+        package['source']['ocr_text'] = image_text[:12000]
     score_package(package)
     save_package(package, lambda path: gh_text(path, SITE_REPO),
                  lambda path, value, message: put_json(path, value, message, SITE_REPO))
