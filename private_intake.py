@@ -6,7 +6,7 @@ from content_control import save_package
 from file_intake import classify, extract_text, ocr_image
 
 
-def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_text, put_json, tg_send, menu, put_binary=None):
+def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_text, put_json, tg_send, menu, put_binary=None, analyze_image=None):
     chat_id = msg.get('chat', {}).get('id')
     if not chat_id:
         return False
@@ -56,11 +56,16 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
             media_path = ''
     if category == 'image':
         extracted = ocr_image(data, name)
+        visual_analysis = analyze_image(data, name) if analyze_image else ''
         if not extracted:
-            tg_send(chat_id, '⚠️ عکس دریافت شد، اما متن خوانایی برای OCR پیدا نشد. لطفاً عکس واضح‌تر یا فایل اصلی را ارسال کنید.', menu)
-            return True
+            extracted = visual_analysis
+            if not extracted:
+                tg_send(chat_id, '⚠️ عکس دریافت شد، اما متن یا تحلیل قابل‌اعتمادی پیدا نشد. لطفاً عکس واضح‌تر یا Caption آموزشی ارسال کنید.', menu)
+                return True
         caption = (msg.get('caption') or '').strip()
         source = (caption + '\n\n' if caption else '') + extracted
+        if visual_analysis and visual_analysis not in source:
+            source += '\n\nتحلیل بصری آموزشی:\n' + visual_analysis
         article = make_article(source, '')
         if not article:
             tg_send(chat_id, '⚠️ متن عکس استخراج شد، اما تولید پیش‌نویس ناموفق بود.', menu)
@@ -68,6 +73,7 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
         package = make_package(article, '', source, '')
         package.setdefault('source', {})['type'] = 'image-ocr'
         package['source']['ocr_text'] = extracted[:12000]
+        package['source']['image_analysis'] = visual_analysis[:8000]
         if media_path:
             package['source']['media_path'] = media_path
             package['source']['media_url'] = 'https://mbms-1356.github.io/forexin-site-/' + media_path

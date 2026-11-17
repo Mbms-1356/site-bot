@@ -41,6 +41,7 @@ def tg_send(chat_id, text, keyboard=None):
 
 MAIN_MENU = {'inline_keyboard': [
     [{'text': '🧭 مرکز عملیات', 'callback_data': 'hub'}],
+    [{'text': '📋 دستورات سریع', 'callback_data': 'commands'}],
     [{'text': '📊 وضعیت کارخانه', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس‌ها', 'callback_data': 'drafts'}],
     [{'text': '📚 راهنمای کار', 'callback_data': 'help'}, {'text': '🔄 بررسی کانال Base', 'callback_data': 'status'}],
     [{'text': '📥 ارسال محتوای جدید', 'callback_data': 'intake'}, {'text': '📄 PDF / Word / متن', 'callback_data': 'document'}],
@@ -48,6 +49,7 @@ MAIN_MENU = {'inline_keyboard': [
 ]}
 
 CONTROL_MENU = {'inline_keyboard': [
+    [{'text': '📋 دستورات سریع', 'callback_data': 'commands'}],
     [{'text': '📦 بسته کامل محتوا', 'callback_data': 'intake'}, {'text': '📄 PDF / Word / متن', 'callback_data': 'document'}],
     [{'text': '🎙 صوت / ویدئو', 'callback_data': 'media'}, {'text': '🖼 عکس و کاور', 'callback_data': 'image'}],
     [{'text': '📝 پیش‌نویس‌ها', 'callback_data': 'drafts'}, {'text': '📊 گزارش مرکز کنترل', 'callback_data': 'control'}],
@@ -62,6 +64,14 @@ CONTROL_MENU = {'inline_keyboard': [
     [{'text': '🚀 شروع /start', 'callback_data': 'main'}, {'text': '🔄 وضعیت /status', 'callback_data': 'status'}],
     [{'text': '📊 کنترل /control', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس /drafts', 'callback_data': 'drafts'}],
     [{'text': 'ℹ️ راهنمای کامل', 'callback_data': 'help'}, {'text': '🔙 منوی اصلی', 'callback_data': 'main'}],
+]}
+
+COMMANDS_MENU = {'inline_keyboard': [
+    [{'text': '🚀 شروع', 'callback_data': 'main'}, {'text': '🔄 وضعیت', 'callback_data': 'status'}],
+    [{'text': '📊 کنترل', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس‌ها', 'callback_data': 'drafts'}],
+    [{'text': '📥 ارسال محتوا', 'callback_data': 'intake'}, {'text': '🖼 ارسال عکس', 'callback_data': 'image'}],
+    [{'text': '🎙 ارسال صوت/ویدئو', 'callback_data': 'media'}, {'text': '📄 ارسال PDF/Word', 'callback_data': 'document'}],
+    [{'text': '🧭 مرکز عملیات', 'callback_data': 'hub'}, {'text': 'ℹ️ راهنما', 'callback_data': 'help'}],
 ]}
 
 
@@ -337,6 +347,23 @@ def transcribe(data, name='media.mp3'):
         return ''
 
 
+def vision_analyze(data, name='image.jpg'):
+    if not OPENROUTER or not data or len(data) > 12 * 1024 * 1024:
+        return ''
+    try:
+        mime = 'image/png' if name.lower().endswith('.png') else 'image/jpeg'
+        payload = {'model': 'openai/gpt-4o-mini', 'messages': [{
+            'role': 'user', 'content': [
+                {'type': 'text', 'text': 'این تصویر آموزشی فارکس/LIT را به فارسی تحلیل کن. فقط مشاهدات قابل‌اعتماد درباره متن، نمودار، جدول و ساختار آموزشی را بنویس؛ سیگنال خرید/فروش یا پیش‌بینی قطعی نده.'},
+                {'type': 'image_url', 'image_url': {'url': 'data:' + mime + ';base64,' + base64.b64encode(data).decode()}}
+            ]}], 'temperature': 0.2, 'max_tokens': 900}
+        raw = http('https://openrouter.ai/api/v1/chat/completions', json.dumps(payload).encode(), {
+            'Authorization': 'Bearer ' + OPENROUTER, 'Content-Type': 'application/json'})
+        return json.loads(raw)['choices'][0]['message']['content'].strip()
+    except Exception:
+        return ''
+
+
 def make_article(source, transcript):
     prompt = '''از محتوای آموزشی زیر فقط JSON معتبر تولید کن. موضوع فارکس و LIT است. ادعای سود قطعی، سیگنال خرید/فروش و وعده درآمد ممنوع است. پاسخ فارسی باشد.
 فیلدها: slug انگلیسی کوتاه، title فارسی، seo_title حداکثر 60 کاراکتر، description حداکثر 155 کاراکتر، keywords آرایه 5 تا 8تایی، body آرایه‌ای از 5 تا 8 پاراگراف آموزشی، excerpt یک پاراگراف، podcast_script متن روان 2 تا 4 دقیقه‌ای، category.
@@ -404,9 +431,12 @@ def handle_post(post):
         media = file_bytes(post['photo'][-1]['file_id'])
         name = 'channel-image.jpg'
         image_text = ocr_image(media, name)
+        image_analysis = vision_analyze(media, name)
     transcript = transcribe(media, name) if media else ''
     source_link = 'https://t.me/' + (chat.get('username') or '') + '/' + str(post.get('message_id'))
-    source = caption or image_text or 'آموزش منتشرشده در کانال Base Forexin'
+    source = caption or image_text or image_analysis or 'آموزش منتشرشده در کانال Base Forexin'
+    if image_analysis and image_analysis not in source:
+        source += '\n\nتحلیل بصری آموزشی:\n' + image_analysis
     if not transcript and not caption and not image_text: return 'no-text'
     article = make_article(source, transcript)
     if not article: return 'generation-failed'
@@ -435,6 +465,7 @@ def handle_post(post):
         package['source']['media_path'] = media_path
         package['source']['media_url'] = 'https://mbms-1356.github.io/forexin-site-/' + media_path
         package['source']['ocr_text'] = image_text[:12000]
+        package['source']['image_analysis'] = image_analysis[:8000]
     score_package(package)
     save_package(package, lambda path: gh_text(path, SITE_REPO),
                  lambda path, value, message: put_json(path, value, message, SITE_REPO))
@@ -476,7 +507,8 @@ def main():
                 handled_private = process_private_upload(msg, st, file_bytes, transcribe, make_article, lambda path: gh_text(path, SITE_REPO),
                                       lambda path, value, message: put_json(path, value, message, SITE_REPO),
                                       tg_send, MAIN_MENU,
-                                      lambda path, data, message: gh_put(path, data, message, SITE_REPO, binary=True))
+                                      lambda path, data, message: gh_put(path, data, message, SITE_REPO, binary=True),
+                                      vision_analyze)
             except Exception as exc:
                 record_failure(st, u.get('update_id'), exc)
                 tg_send(msg['chat']['id'], '⚠️ پردازش این فایل ناموفق شد و خطا برای بررسی ثبت شد. لطفاً دوباره ارسال کنید.', MAIN_MENU)
@@ -492,6 +524,8 @@ def main():
                 tg_send(chat_id, summary(load_index(lambda path: gh_text(path, SITE_REPO))), MAIN_MENU)
             elif data == 'hub':
                 tg_send(chat_id, '🧭 مرکز عملیات Forexin\n\nهمه فرمان‌های تولید، دریافت، کنترل و برنامه‌ریزی محتوا از این بخش قابل دسترسی است.', CONTROL_MENU)
+            elif data == 'commands':
+                tg_send(chat_id, '📋 دستورات سریع کارخانه محتوا\n\nاز این بخش می‌توانید نوع ورودی و گزارش موردنظر را سریع انتخاب کنید.\n\nفرمان‌های متنی: /start  /status  /control  /drafts', COMMANDS_MENU)
             elif data == 'main':
                 tg_send(chat_id, 'منوی اصلی:', MAIN_MENU)
             elif data == 'drafts':

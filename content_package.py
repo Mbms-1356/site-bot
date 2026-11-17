@@ -4,6 +4,7 @@ import re
 import time
 from typing import Any, Dict, List
 from quality_gate import audit_package
+from brand_config import BRAND, branded_cta
 
 PLATFORMS = ('website', 'podcast', 'instagram', 'telegram', 'whatsapp', 'tiktok', 'youtube', 'linkedin', 'x')
 
@@ -47,10 +48,11 @@ def make_package(article: Dict[str, Any], source_link: str, source_text: str,
     tags = _hashtags(title, keywords)
     hashtag_text = ' '.join(tags)
     risk_notice = '⚠️ این محتوا صرفاً آموزشی است و توصیه معاملاتی یا تضمین سود نیست.'
-    cta = 'برای آموزش کامل‌تر، مقاله و محتوای آموزشی Forexin را دنبال کنید.'
+    cta = branded_cta()
     visual_prompt = (f'کاور آموزشی حرفه‌ای درباره «{title}» برای برند Forexin؛ فضای مالی مدرن، '
                      'رنگ‌های سبز تیره و طلایی، نمودار انتزاعی بدون عدد جعلی، نورپردازی تمیز، '
-                     'بدون وعده سود، بدون سیگنال خرید یا فروش، بدون لوگوی ساختگی، فضای خالی امن برای تیتر فارسی.')
+                     'بدون وعده سود، بدون سیگنال خرید یا فروش، بدون لوگوی ساختگی، فضای خالی امن برای تیتر فارسی؛ '
+                     'در صورت وجود لوگوی رسمی، همان لوگو را در گوشه امن کاور استفاده کن.')
     hooks = [
         f'چرا بیشتر معامله‌گران در موضوع «{title}» اشتباه می‌کنند؟',
         f'قبل از تصمیم‌گیری درباره «{title}»، این نکته را بررسی کنید.',
@@ -62,6 +64,9 @@ def make_package(article: Dict[str, Any], source_link: str, source_text: str,
         'slug': slug,
         'status': 'draft',
         'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+        'brand': {'name': BRAND['name'], 'links': BRAND.copy(),
+                  'logo_url': BRAND['logo_url'],
+                  'logo_instruction': 'فقط از لوگوی رسمی تأییدشده استفاده شود؛ لوگوی ساختگی تولید نشود.'},
         'source': {'url': source_link, 'text': source_text[:4000], 'transcript': transcript[:12000]},
         'article': {'title': title, 'description': description, 'excerpt': excerpt,
                     'keywords': keywords, 'category': article.get('category', 'آموزش'), 'body': body},
