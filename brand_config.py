@@ -9,7 +9,8 @@ BRAND = {
     'youtube': 'https://www.youtube.com/@Forexin.turkaslani',
     'instagram': 'https://instagram.com/Forexin.turkaslani',
     'website': 'https://mbms-1356.github.io/forexin-site-/',
-    'logo_url': os.environ.get('BRAND_LOGO_URL', '').strip(),
+    'logo_url': (os.environ.get('BRAND_LOGO_URL', '').strip()
+                 or 'https://mbms-1356.github.io/forexin-site-/logo.png'),
 }
 
 
