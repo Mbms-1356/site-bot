@@ -29,14 +29,26 @@ def http(url, data=None, headers=None, timeout=60, method=None):
 
 def tg(method, params=None):
     q = '' if not params else '?' + urllib.parse.urlencode(params)
-    return json.loads(http(API + '/' + method + q, headers={'User-Agent': 'ForexinContentAgent'}))
+    last = None
+    for attempt in range(3):
+        try:
+            return json.loads(http(API + '/' + method + q, headers={'User-Agent': 'ForexinContentAgent'}, timeout=30))
+        except Exception as exc:
+            last = exc
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    raise last
 
 
 def tg_send(chat_id, text, keyboard=None):
     params = {'chat_id': chat_id, 'text': text}
     if keyboard:
         params['reply_markup'] = json.dumps(keyboard, ensure_ascii=False)
-    return tg('sendMessage', params)
+    try:
+        return tg('sendMessage', params)
+    except Exception as exc:
+        print('telegram-send-failed:', str(exc)[:200])
+        return None
 
 
 MAIN_MENU = {'inline_keyboard': [
@@ -474,7 +486,11 @@ def handle_post(post):
 
 def main():
     st = state_load(); offset = int(st.get('offset', 0))
-    updates = tg('getUpdates', {'offset': offset + 1, 'timeout': 5}).get('result', [])
+    try:
+        updates = tg('getUpdates', {'offset': offset + 1, 'timeout': 5}).get('result', [])
+    except Exception as exc:
+        print('telegram-poll-failed:', str(exc)[:200])
+        return
     results = []
     for u in updates:
         st['offset'] = max(int(st.get('offset', 0)), int(u.get('update_id', 0)))
