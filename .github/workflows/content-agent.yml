@@ -17,9 +17,9 @@ jobs:
       GROQ_KEY: ${{ secrets.GROQ_KEY }}
       OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
       CONTENT_ADMIN_CHAT_ID: ${{ secrets.CONTENT_ADMIN_CHAT_ID }}
-      GITHUB_APP_ID: ${{ secrets.GITHUB_APP_ID }}
-      GITHUB_APP_INSTALLATION_ID: ${{ secrets.GITHUB_APP_INSTALLATION_ID }}
-      GITHUB_APP_PRIVATE_KEY: ${{ secrets.GITHUB_APP_PRIVATE_KEY_2026 || secrets.GITHUB_APP_PRIVATE_KEY }}
+      GITHUB_APP_ID: ${{ secrets.APP_ID_2026 }}
+      GITHUB_APP_INSTALLATION_ID: ${{ secrets.APP_INSTALLATION_ID_2026 }}
+      GITHUB_APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY_2026 }}
     steps:
       - uses: actions/checkout@v4
       - name: Install media tools
