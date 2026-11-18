@@ -491,7 +491,9 @@ def handle_post(post):
 def main():
     st = state_load(); offset = int(st.get('offset', 0))
     try:
-        updates = tg('getUpdates', {'offset': offset + 1, 'timeout': 5}).get('result', [])
+        # GitHub Actions is already invoked on a schedule; do not add a long
+        # Telegram long-poll delay to each short-lived runner.
+        updates = tg('getUpdates', {'offset': offset + 1, 'timeout': 0, 'allowed_updates': json.dumps(['message', 'callback_query', 'channel_post'])}).get('result', [])
     except Exception as exc:
         print('telegram-poll-failed:', str(exc)[:200])
         return
@@ -542,6 +544,12 @@ def main():
                 continue
         callback = u.get('callback_query')
         if callback:
+            # Stop Telegram's loading spinner immediately, before any GitHub
+            # API or LLM work is performed for the selected action.
+            try:
+                tg('answerCallbackQuery', {'callback_query_id': callback.get('id', '')})
+            except Exception:
+                pass
             chat_id = callback.get('message', {}).get('chat', {}).get('id')
             data = callback.get('data', '')
             if data == 'control':
