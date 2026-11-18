@@ -31,7 +31,7 @@ def _result_links(package, media_url=''):
     return '\n'.join(lines)
 
 
-def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_text, put_json, tg_send, menu, put_binary=None, analyze_image=None, drive_upload=None, drive_json=None):
+def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_text, put_json, tg_send, menu, put_binary=None, analyze_image=None, drive_upload=None, drive_json=None, make_audio=None, render_reel=None, tg_upload=None):
     chat_id = msg.get('chat', {}).get('id')
     if not chat_id:
         return False
@@ -46,6 +46,11 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
         package = make_package(article, '', text, '')
         score_package(package)
         save_package(package, lambda path: gh_text(path), lambda path, value, message: put_json(path, value, message))
+        if make_audio and tg_upload:
+            audio_preview = make_audio(article.get('podcast_script', ''))
+            if audio_preview:
+                tg_upload('sendAudio', 'audio', package.get('slug', 'podcast') + '.mp3', audio_preview, chat_id,
+                          '🔊 پیش‌نمایش صوتی متن — هنوز منتشر نشده است', menu)
         tg_send(chat_id, f"✅ متن دریافت شد و پیش‌نویس ساخته شد.\n📊 امتیاز: {package['quality']['score']}\n\n{_result_links(package)}", menu)
         return True
     name, file_id, kind = '', None, ''
@@ -115,6 +120,19 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
         save_package(package, lambda path: gh_text(path), lambda path, value, message: put_json(path, value, message))
         if drive_json:
             drive_json('05_Articles_SEO/' + package.get('id', 'package') + '.json', package)
+        if tg_upload:
+            tg_upload('sendPhoto', 'photo', package.get('slug', 'cover') + '.jpg', data, chat_id,
+                      '🖼 پیش‌نمایش عکس ورودی — هنوز منتشر نشده است', menu)
+            if make_audio:
+                audio_preview = make_audio(article.get('podcast_script', ''))
+                if audio_preview:
+                    tg_upload('sendAudio', 'audio', package.get('slug', 'podcast') + '.mp3', audio_preview, chat_id,
+                              '🔊 پیش‌نمایش صوتی مقاله — هنوز منتشر نشده است', menu)
+                    if render_reel:
+                        reel_preview = render_reel(data, audio_preview, article.get('podcast_script', ''))
+                        if reel_preview:
+                            tg_upload('sendVideo', 'video', package.get('slug', 'reel') + '.mp4', reel_preview, chat_id,
+                                      '🎬 پیش‌نمایش ریلز ۹:۱۶ — هنوز منتشر نشده است', menu)
         tg_send(chat_id, f"✅ عکس با OCR خوانده شد و پیش‌نویس ساخته شد.\n🔎 متن استخراج‌شده: {len(extracted)} کاراکتر\n📊 امتیاز: {package['quality']['score']}\n\n{_result_links(package, package.get('source', {}).get('media_url', ''))}", menu)
         return True
     extracted = transcribe(data, name) if category in ('audio', 'video') else extract_text(data, name)
@@ -136,5 +154,10 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
     save_package(package, lambda path: gh_text(path), lambda path, value, message: put_json(path, value, message))
     if drive_json:
         drive_json('05_Articles_SEO/' + package.get('id', 'package') + '.json', package)
+    if make_audio and tg_upload:
+        audio_preview = make_audio(article.get('podcast_script', ''))
+        if audio_preview:
+            tg_upload('sendAudio', 'audio', package.get('slug', 'podcast') + '.mp3', audio_preview, chat_id,
+                      '🔊 پیش‌نمایش صوتی فایل — هنوز منتشر نشده است', menu)
     tg_send(chat_id, f"✅ فایل دریافت و پیش‌نویس ساخته شد.\n📄 نوع: {category}\n📊 امتیاز: {package['quality']['score']}\n\n{_result_links(package, package.get('source', {}).get('media_url', ''))}", menu)
     return True
