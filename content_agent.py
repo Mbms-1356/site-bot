@@ -72,6 +72,7 @@ CONTROL_MENU = {'inline_keyboard': [
     [{'text': '🗂 آرشیو دارایی‌ها', 'callback_data': 'archive'}, {'text': '🧠 دانش چت‌بات', 'callback_data': 'knowledge'}],
     [{'text': '📈 تحلیل سؤال‌ها', 'callback_data': 'question-insights'}],
     [{'text': '🩺 سلامت سیستم', 'callback_data': 'health'}, {'text': '🔁 صف خطاها', 'callback_data': 'errors'}],
+    [{'text': '☁️ وضعیت Google Drive', 'callback_data': 'drive-status'}],
     [{'text': '🚀 صف انتشار', 'callback_data': 'publishing'}, {'text': '🎨 دارایی بصری', 'callback_data': 'visual-assets'}],
     [{'text': '📊 تحلیل عملکرد', 'callback_data': 'analytics'}, {'text': '🔐 آمادگی GitHub App', 'callback_data': 'github-app'}],
     [{'text': '🚀 شروع /start', 'callback_data': 'main'}, {'text': '🔄 وضعیت /status', 'callback_data': 'status'}],
@@ -164,6 +165,7 @@ def record_failure(st, update_id, error):
 
 
 def health_report(st):
+    drive = drive_archive.status()
     return ('🩺 سلامت کارخانه محتوا\n\n'
             f"Telegram token: {'✅' if TOKEN else '❌'}\n"
             f"GitHub token: {'✅' if PAT else '❌'}\n"
@@ -171,6 +173,7 @@ def health_report(st):
             f"Transcription key: {'✅' if GROQ else '⚠️ ندارد'}\n"
             f"آخرین offset: {st.get('offset', 0)}\n"
             f"خطاهای در صف بازبینی: {len(st.get('failures', []))}\n\n"
+            f"Google Drive: {'✅ فعال' if drive['enabled'] else '⚪ آماده‌سازی نشده (fallback GitHub)'}\n\n"
             'پردازش‌های شکست‌خورده در اجرای بعدی قابل بررسی هستند.')
 
 
@@ -590,6 +593,13 @@ def main():
                     tg_send(chat_id, f'✅ پیش‌نویس {label}.\nوضعیت جدید: {new_status}', MAIN_MENU)
             elif data == 'status':
                 tg_send(chat_id, '✅ کارخانه محتوا فعال است و کانال Base را در اجرای بعدی بررسی می‌کند.', MAIN_MENU)
+            elif data == 'drive-status':
+                drive = drive_archive.status()
+                tg_send(chat_id, ('☁️ وضعیت Google Drive\n\n'
+                                  f"حالت: {drive['mode']}\n"
+                                  f"پوشه اصلی: {'✅ تنظیم شده' if drive['root_folder_configured'] else '❌ تنظیم نشده'}\n"
+                                  f"Credential: {'✅ تنظیم شده' if drive['credentials_configured'] else '❌ تنظیم نشده'}\n\n"
+                                  'تا زمان تکمیل Credential، ذخیره‌سازی GitHub بدون وقفه ادامه دارد.'), CONTROL_MENU)
             elif data == 'health':
                 tg_send(chat_id, health_report(st), CONTROL_MENU)
             elif data == 'errors':

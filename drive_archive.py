@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 ROOT_FOLDER_ID = os.environ.get('GOOGLE_DRIVE_ROOT_FOLDER_ID', '').strip()
 _CREDENTIALS = os.environ.get('GOOGLE_DRIVE_CREDENTIALS_JSON', '').strip()
 _service = None
+_folder_cache = {}
 
 
 def enabled() -> bool:
@@ -46,8 +47,32 @@ def _get_service():
 
 
 def _parent_for(path: str) -> str:
-    """Use root as the safe default; nested folder mapping can be added later."""
-    return ROOT_FOLDER_ID
+    """Resolve a relative archive path under the configured Drive root."""
+    service = _get_service()
+    if not service:
+        return ROOT_FOLDER_ID
+    parent = ROOT_FOLDER_ID
+    parts = [part for part in path.split('/')[:-1] if part]
+    for name in parts:
+        cache_key = (parent, name)
+        if cache_key in _folder_cache:
+            parent = _folder_cache[cache_key]
+            continue
+        query = (
+            "name = '" + name.replace("'", "\\'") + "' and "
+            "mimeType = 'application/vnd.google-apps.folder' and "
+            "trashed = false and '" + parent + "' in parents"
+        )
+        found = service.files().list(q=query, pageSize=1, fields='files(id)').execute().get('files', [])
+        if found:
+            parent = found[0]['id']
+        else:
+            created = service.files().create(
+                body={'name': name, 'mimeType': 'application/vnd.google-apps.folder', 'parents': [parent]},
+                fields='id').execute()
+            parent = created['id']
+        _folder_cache[cache_key] = parent
+    return parent
 
 
 def upload_bytes(path: str, data: bytes, mime_type: str = 'application/octet-stream') -> Optional[Dict[str, Any]]:
