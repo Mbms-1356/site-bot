@@ -190,22 +190,28 @@ MAIN_MENU = {'inline_keyboard': [
     [{'text': '🎙 صوت / ویدئو', 'callback_data': 'media'}, {'text': '🖼 عکس آموزشی', 'callback_data': 'image'}],
 ]}
 
+QUALITY_MENU = {'inline_keyboard': [
+    [{'text': '🧪 گزارش کیفیت', 'callback_data': 'quality-panel'}, {'text': '📝 پیش‌نویس‌ها', 'callback_data': 'drafts'}],
+    [{'text': '🚫 موارد مسدودشده', 'callback_data': 'quality-blocked'}, {'text': '🩺 سلامت سیستم', 'callback_data': 'health'}],
+    [{'text': '🔁 خطاهای اخیر', 'callback_data': 'errors'}, {'text': '🔙 پنل عملیات', 'callback_data': 'ops-panel'}],
+]}
+
+OPERATIONS_MENU = {'inline_keyboard': [
+    [{'text': '🔎 تحقیق و ایده', 'callback_data': 'research'}, {'text': '👥 تحلیل رقبا', 'callback_data': 'competitors'}],
+    [{'text': '📅 تقویم محتوا', 'callback_data': 'calendar'}, {'text': '📣 رشد قانونی', 'callback_data': 'growth'}],
+    [{'text': '🚀 صف انتشار', 'callback_data': 'publishing'}, {'text': '📊 تحلیل عملکرد', 'callback_data': 'analytics'}],
+    [{'text': '🗂 آرشیو تأییدشده', 'callback_data': 'archive'}, {'text': '🧠 دانش چت‌بات', 'callback_data': 'knowledge'}],
+    [{'text': '🧪 کنترل کیفیت', 'callback_data': 'quality-panel'}, {'text': '☁️ وضعیت Drive', 'callback_data': 'drive-status'}],
+    [{'text': '🔙 منوی اصلی', 'callback_data': 'main'}],
+]}
+
 CONTROL_MENU = {'inline_keyboard': [
+    [{'text': '🧪 پنل کنترل کیفیت', 'callback_data': 'quality-panel'}, {'text': '🧭 پنل عملیاتی', 'callback_data': 'ops-panel'}],
     [{'text': '📋 دستورات سریع', 'callback_data': 'commands'}],
-    [{'text': '📦 بسته کامل محتوا', 'callback_data': 'intake'}, {'text': '📄 PDF / Word / متن', 'callback_data': 'document'}],
-    [{'text': '🎙 صوت / ویدئو', 'callback_data': 'media'}, {'text': '🖼 عکس و کاور', 'callback_data': 'image'}],
-    [{'text': '📝 پیش‌نویس‌ها', 'callback_data': 'drafts'}, {'text': '📊 گزارش مرکز کنترل', 'callback_data': 'control'}],
-    [{'text': '🔎 ایده و تحقیق', 'callback_data': 'research'}, {'text': '👥 تحلیل رقبا', 'callback_data': 'competitors'}],
-    [{'text': '📅 تقویم محتوا', 'callback_data': 'calendar'}, {'text': '📚 راهنمای تحقیق', 'callback_data': 'research-help'}],
-    [{'text': '📣 رشد قانونی مخاطب', 'callback_data': 'growth'}],
-    [{'text': '🗂 آرشیو دارایی‌ها', 'callback_data': 'archive'}, {'text': '🧠 دانش چت‌بات', 'callback_data': 'knowledge'}],
-    [{'text': '📈 تحلیل سؤال‌ها', 'callback_data': 'question-insights'}],
-    [{'text': '🩺 سلامت سیستم', 'callback_data': 'health'}, {'text': '🔁 صف خطاها', 'callback_data': 'errors'}],
-    [{'text': '☁️ وضعیت Google Drive', 'callback_data': 'drive-status'}],
-    [{'text': '🚀 صف انتشار', 'callback_data': 'publishing'}, {'text': '🎨 دارایی بصری', 'callback_data': 'visual-assets'}],
-    [{'text': '📊 تحلیل عملکرد', 'callback_data': 'analytics'}, {'text': '🔐 آمادگی GitHub App', 'callback_data': 'github-app'}],
+    [{'text': '📥 دریافت محتوا', 'callback_data': 'intake'}, {'text': '📝 پیش‌نویس‌ها', 'callback_data': 'drafts'}],
+    [{'text': '📈 تحلیل سؤال‌ها', 'callback_data': 'question-insights'}, {'text': '🎨 دارایی بصری', 'callback_data': 'visual-assets'}],
+    [{'text': '🔐 آمادگی GitHub App', 'callback_data': 'github-app'}, {'text': '☁️ وضعیت Drive', 'callback_data': 'drive-status'}],
     [{'text': '🚀 شروع /start', 'callback_data': 'main'}, {'text': '🔄 وضعیت /status', 'callback_data': 'status'}],
-    [{'text': '📊 کنترل /control', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس /drafts', 'callback_data': 'drafts'}],
     [{'text': 'ℹ️ راهنمای کامل', 'callback_data': 'help'}, {'text': '🔙 منوی اصلی', 'callback_data': 'main'}],
 ]}
 
@@ -308,6 +314,22 @@ def health_report(st):
             f"خطاهای در صف بازبینی: {len(st.get('failures', []))}\n\n"
             f"Google Drive: {'✅ فعال' if drive['enabled'] else '⚪ آماده‌سازی نشده (fallback GitHub)'}\n\n"
             'پردازش‌های شکست‌خورده در اجرای بعدی قابل بررسی هستند.')
+
+
+def quality_report(index):
+    total = len(index)
+    drafts = sum(1 for x in index if x.get('status') == 'draft')
+    approved = sum(1 for x in index if x.get('status') in ('approved', 'published'))
+    rejected = sum(1 for x in index if x.get('status') == 'rejected')
+    low = [x for x in index if int(x.get('score') or 0) < 90]
+    return ('🧪 پنل کنترل کیفیت\n\n'
+            f'کل بسته‌ها: {total}\n'
+            f'نیازمند بررسی: {drafts}\n'
+            f'تأییدشده/منتشرشده: {approved}\n'
+            f'ردشده: {rejected}\n'
+            f'امتیاز زیر ۹۰: {len(low)}\n\n'
+            'قواعد اجباری: هشدار ریسک، نبود تضمین سود، نبود سیگنال قطعی، منبع مشخص و بررسی انسانی.\n'
+            'هیچ بسته‌ای بدون عبور از Quality Gate و تأیید مدیر منتشر نمی‌شود.')
 
 
 def build_research(index):
@@ -704,7 +726,20 @@ def main():
                 pass
             chat_id = callback.get('message', {}).get('chat', {}).get('id')
             data = callback.get('data', '')
-            if data == 'control':
+            if data == 'quality-panel':
+                tg_send(chat_id, quality_report(load_index(lambda path: gh_text(path, SITE_REPO))), QUALITY_MENU)
+            elif data == 'quality-blocked':
+                rows = load_index(lambda path: gh_text(path, SITE_REPO))
+                low = [x for x in rows if int(x.get('score') or 0) < 90][:10]
+                if not low:
+                    tg_send(chat_id, '✅ فعلاً مورد کم‌امتیاز یا مسدودشده‌ای در فهرست خلاصه وجود ندارد.', QUALITY_MENU)
+                else:
+                    lines = ['🚫 موارد نیازمند کنترل بیشتر:']
+                    lines.extend(f"• {x.get('title', 'بدون عنوان')} | امتیاز {x.get('score', 0)} | {x.get('status', 'draft')}" for x in low)
+                    tg_send(chat_id, '\n'.join(lines), QUALITY_MENU)
+            elif data == 'ops-panel':
+                tg_send(chat_id, '🧭 پنل عملیاتی\n\nتحقیق عمومی، تحلیل رقبا، تقویم محتوا، رشد قانونی، صف انتشار، آرشیو و تحلیل عملکرد از این بخش مدیریت می‌شوند.\n\n⚠️ مشتری‌یابی با پیام خصوصی یا استخراج اعضای رقبا فعال نیست؛ فقط جذب اختیاری و مبتنی بر محتوای عمومی مجاز است.', OPERATIONS_MENU)
+            elif data == 'control':
                 tg_send(chat_id, summary(load_index(lambda path: gh_text(path, SITE_REPO))), MAIN_MENU)
             elif data == 'hub':
                 tg_send(chat_id, '🧭 مرکز عملیات Forexin\n\nهمه فرمان‌های تولید، دریافت، کنترل و برنامه‌ریزی محتوا از این بخش قابل دسترسی است.', CONTROL_MENU)
