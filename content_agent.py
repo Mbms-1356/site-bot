@@ -46,7 +46,10 @@ def tg_send(chat_id, text, keyboard=None):
     if keyboard:
         params['reply_markup'] = json.dumps(keyboard, ensure_ascii=False)
     try:
-        return tg('sendMessage', params)
+        result = tg('sendMessage', params)
+        if not result.get('ok'):
+            print('telegram-send-result: failed', result.get('description', 'unknown'))
+        return result
     except Exception as exc:
         print('telegram-send-failed:', str(exc)[:200])
         return None
@@ -490,6 +493,11 @@ def handle_post(post):
 
 def main():
     st = state_load(); offset = int(st.get('offset', 0))
+    try:
+        identity = tg('getMe').get('result', {})
+        print('telegram-identity:', identity.get('username', ''), identity.get('id', ''))
+    except Exception as exc:
+        print('telegram-identity-failed:', str(exc)[:180])
     try:
         # GitHub Actions is already invoked on a schedule; do not add a long
         # Telegram long-poll delay to each short-lived runner.
