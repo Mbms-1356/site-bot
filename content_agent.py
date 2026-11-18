@@ -56,6 +56,116 @@ def tg_send(chat_id, text, keyboard=None):
         return None
 
 
+def tg_upload(method, field, filename, data, chat_id, caption='', keyboard=None):
+    """Upload a preview binary to Telegram using multipart/form-data."""
+    if not data or not CONTENT_ADMIN_CHAT_ID:
+        return None
+    boundary = '----ForexinPreview' + str(int(time.time() * 1000))
+    parts = []
+    def text_part(name, value):
+        parts.append((f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n').encode())
+    text_part('chat_id', str(chat_id))
+    if caption:
+        text_part('caption', caption[:1000])
+    if keyboard:
+        text_part('reply_markup', json.dumps(keyboard, ensure_ascii=False))
+    parts.append((f'--{boundary}\r\nContent-Disposition: form-data; name="{field}"; filename="{filename}"\r\nContent-Type: application/octet-stream\r\n\r\n').encode())
+    parts.append(data)
+    parts.append(f'\r\n--{boundary}--\r\n'.encode())
+    try:
+        return json.loads(http(API + '/' + method, b''.join(parts), {
+            'Content-Type': 'multipart/form-data; boundary=' + boundary,
+            'User-Agent': 'ForexinContentAgent'}, timeout=180))
+    except Exception as exc:
+        print('telegram-upload-failed:', method, str(exc)[:180])
+        return None
+
+
+def compact_image(data, max_side=1600, quality=82):
+    """Keep a readable JPEG archive copy while avoiding large Git/Drive blobs."""
+    try:
+        from PIL import Image
+        image = Image.open(io.BytesIO(data)).convert('RGB')
+        image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+        out = io.BytesIO()
+        image.save(out, format='JPEG', quality=quality, optimize=True, progressive=True)
+        return out.getvalue()
+    except Exception:
+        return data
+
+
+def preview_package(chat_id, package, article, audio=None, reel=None, image=None):
+    """Send every generated asset to the admin before any public publication."""
+    if not CONTENT_ADMIN_CHAT_ID or str(chat_id) != str(CONTENT_ADMIN_CHAT_ID):
+        return
+    package_id = package.get('id', '')
+    keyboard = draft_keyboard(package, True)
+    title = article.get('title', 'بدون عنوان')
+    caption = ('🔍 پیش‌نمایش برای بررسی انسانی\n\n' + title + '\n\n' +
+               str(article.get('description', '')) +
+               '\n\n⚠️ هنوز منتشر نشده است. پس از بررسی، دکمه «تأیید» را بزنید.')
+    if image:
+        tg_upload('sendPhoto', 'photo', package.get('slug', 'cover') + '.jpg', image, chat_id, caption, keyboard)
+    tg_send(chat_id, ('📰 مقاله و بسته محتوایی آماده بررسی است.\n\n' +
+                       'پیش‌نویس: ' + package_id + '\n' +
+                       '✅ تأیید = اجازه انتشار\n🚫 رد = عدم انتشار\n✏️ اصلاح دستی = ویرایش فایل JSON'), keyboard)
+    if audio:
+        tg_upload('sendAudio', 'audio', package.get('slug', 'podcast') + '.mp3', audio, chat_id,
+                  '🔊 پیش‌نمایش صوت فارسی — هنوز منتشر نشده است', keyboard)
+    if reel:
+        tg_upload('sendVideo', 'video', package.get('slug', 'reel') + '.mp4', reel, chat_id,
+                  '🎬 پیش‌نمایش ریلز ۹:۱۶ — هنوز منتشر نشده است', keyboard)
+
+
+def gh_binary(path, repo=SITE_REPO):
+    item = gh_json(path, repo)
+    if not item or not item.get('content'):
+        return None
+    try:
+        return base64.b64decode(item['content'])
+    except Exception:
+        return None
+
+
+def publish_approved_package(package):
+    """Publish the website/audio/reel only after a human approval callback."""
+    article = dict(package.get('article', {}))
+    slug = package.get('slug') or 'forexin-content'
+    source_link = package.get('source', {}).get('url', '')
+    audio_url = ''
+    audio_path = package.get('review', {}).get('preview_audio_path', '')
+    audio = gh_binary(audio_path) if audio_path else None
+    if audio:
+        final_audio_path = 'podcasts/' + slug + '.mp3'
+        gh_put(final_audio_path, audio, 'Publish approved podcast: ' + slug, SITE_REPO, binary=True)
+        audio_url = 'https://mbms-1356.github.io/forexin-site-/' + final_audio_path
+        package.setdefault('podcast', {})['audio_url'] = audio_url
+    page = render_article(article, source_link, audio_url)
+    gh_put('articles/' + slug + '.html', page, 'Publish approved SEO article: ' + slug)
+    index = gh_json('articles/index.json')
+    items = []
+    if index:
+        try: items = json.loads(base64.b64decode(index['content']).decode())
+        except Exception: pass
+    items = [x for x in items if x.get('slug') != slug]
+    items.insert(0, {'slug': slug, 'title': article.get('title', ''),
+                     'description': article.get('description', ''),
+                     'url': 'articles/' + slug + '.html', 'audio': audio_url,
+                     'source': source_link,
+                     'published_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})
+    gh_put('articles/index.json', json.dumps(items[:200], ensure_ascii=False, indent=2), 'Update approved article index')
+    reel_path = package.get('short_video', {}).get('preview_path', '')
+    reel = gh_binary(reel_path) if reel_path else None
+    if reel:
+        final_reel_path = 'reels/' + slug + '.mp4'
+        gh_put(final_reel_path, reel, 'Publish approved educational reel: ' + slug, SITE_REPO, binary=True)
+        package['short_video']['url'] = 'https://mbms-1356.github.io/forexin-site-/' + final_reel_path
+        package['short_video']['status'] = 'published'
+    package.setdefault('review', {})['state'] = 'approved_and_published'
+    package.setdefault('publishing', {})['website'] = 'published'
+    return package
+
+
 MAIN_MENU = {'inline_keyboard': [
     [{'text': '🧭 مرکز عملیات', 'callback_data': 'hub'}],
     [{'text': '📋 دستورات سریع', 'callback_data': 'commands'}],
@@ -470,38 +580,31 @@ def handle_post(post):
     if not article: return 'generation-failed'
     slug = slugify(article.get('slug'))
     audio = make_audio(article.get('podcast_script', ''))
+    # Generated assets stay in a private review area until the admin approves.
     audio_url = ''
+    preview_audio_path = ''
     if audio:
-        audio_path = 'podcasts/' + slug + '.mp3'
-        gh_put(audio_path, audio, 'Add podcast audio: ' + slug, SITE_REPO, binary=True)
-        audio_url = 'https://mbms-1356.github.io/forexin-site-/' + audio_path
-    page = render_article(article, source_link, audio_url)
-    gh_put('articles/' + slug + '.html', page, 'Publish SEO article: ' + slug)
-    index = gh_json('articles/index.json')
-    items = []
-    if index:
-        try: items = json.loads(base64.b64decode(index['content']).decode())
-        except Exception: pass
-    items = [x for x in items if x.get('slug') != slug]
-    items.insert(0, {'slug': slug, 'title': article.get('title',''), 'description': article.get('description',''), 'url': 'articles/' + slug + '.html', 'audio': audio_url, 'source': source_link, 'published_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})
-    gh_put('articles/index.json', json.dumps(items[:200], ensure_ascii=False, indent=2), 'Update article index')
+        preview_audio_path = 'content-control/previews/' + slug + '.mp3'
+        gh_put(preview_audio_path, audio, 'Store podcast preview: ' + slug, SITE_REPO, binary=True)
     package = make_package(article, source_link, source, transcript or image_text, audio_url)
+    package.setdefault('review', {})['required'] = True
+    package['review']['state'] = 'waiting_for_telegram_review'
+    package['review']['preview_audio_path'] = preview_audio_path
     reel_url = ''
+    reel = None
     if media and name == 'channel-image.jpg' and audio:
-        reel = render_image_reel(media, audio)
+        reel = render_image_reel(media, audio, article.get('podcast_script', ''))
         if reel:
-            reel_path = 'reels/' + slug + '.mp4'
+            reel_path = 'content-control/previews/' + slug + '.mp4'
             gh_put(reel_path, reel, 'Render educational reel: ' + slug, SITE_REPO, binary=True)
-            reel_url = 'https://mbms-1356.github.io/forexin-site-/' + reel_path
             package.setdefault('short_video', {})['status'] = 'rendered'
-            package['short_video']['url'] = reel_url
+            package['short_video']['preview_path'] = reel_path
             package['short_video']['format'] = 'mp4'
             package['short_video']['aspect_ratio'] = '9:16'
-    if reel_url:
-        article['reel_url'] = reel_url
     if media and name == 'channel-image.jpg':
         media_path = 'media/uploads/' + __import__('hashlib').sha256(media).hexdigest()[:20] + '.jpg'
-        gh_put(media_path, media, 'Archive Base channel image: ' + slug, SITE_REPO, binary=True)
+        compact = compact_image(media)
+        gh_put(media_path, compact, 'Archive compact Base channel image: ' + slug, SITE_REPO, binary=True)
         package.setdefault('source', {})['type'] = 'channel-image-ocr'
         package['source']['media_path'] = media_path
         package['source']['media_url'] = 'https://mbms-1356.github.io/forexin-site-/' + media_path
@@ -510,7 +613,8 @@ def handle_post(post):
     score_package(package)
     save_package(package, lambda path: gh_text(path, SITE_REPO),
                  lambda path, value, message: put_json(path, value, message, SITE_REPO))
-    return 'published:' + slug + (':audio' if audio else ':text-only') + ':draft-package'
+    preview_package(CONTENT_ADMIN_CHAT_ID, package, article, audio, reel, media if name == 'channel-image.jpg' else None)
+    return 'preview-ready:' + slug + (':audio' if audio else ':text-only') + ':awaiting-approval'
 
 
 def main():
@@ -627,9 +731,14 @@ def main():
                 else:
                     new_status = 'approved' if action == 'approve' else 'rejected'
                     try:
+                        if new_status == 'approved':
+                            package = publish_approved_package(package)
                         set_status(package, new_status, str(chat_id))
                     except ValueError as exc:
                         tg_send(chat_id, '⛔ تأیید مسدود شد. ابتدا Quality Gate را اصلاح کنید.\n' + str(package.get('quality', {}).get('audit', {}).get('warnings', [])), MAIN_MENU)
+                        continue
+                    except Exception as exc:
+                        tg_send(chat_id, '⚠️ انتشار پس از تأیید ناموفق شد و وضعیت پیش‌نویس تغییر نکرد.\n' + str(exc)[:500], MAIN_MENU)
                         continue
                     save_package(package, lambda path: gh_text(path, SITE_REPO), lambda path, value, message: put_json(path, value, message, SITE_REPO))
                     label = 'تأیید شد' if new_status == 'approved' else 'رد شد'

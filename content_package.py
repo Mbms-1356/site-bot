@@ -104,7 +104,7 @@ def make_package(article: Dict[str, Any], source_link: str, source_text: str,
                     'has_title': bool(title), 'has_description': bool(article.get('description')),
                     'has_keywords': len(keywords) >= 3, 'has_body': len(body) >= 3,
                     'risk_notice_required': True}, 'needs_review': True},
-        'publishing': {'website': 'auto', 'social': 'draft_only', 'approved_by': None, 'approved_at': None},
+        'publishing': {'website': 'draft_only', 'social': 'draft_only', 'approved_by': None, 'approved_at': None},
     }
 
 

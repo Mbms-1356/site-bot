@@ -35,6 +35,6 @@ jobs:
             sudo apt-get update -y >/dev/null 2>&1
             sudo apt-get install -y ffmpeg tesseract-ocr tesseract-ocr-fas >/dev/null 2>&1
           fi
-          python3 -m pip install --quiet edge-tts pypdf PyJWT cryptography google-api-python-client google-auth
+          python3 -m pip install --quiet edge-tts pypdf Pillow PyJWT cryptography google-api-python-client google-auth
       - name: Process Base channel content
         run: python3 content_agent.py

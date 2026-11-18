@@ -1,11 +1,25 @@
 """Private Telegram intake orchestration for the content factory."""
 import hashlib
+import io
 from pathlib import Path
 from content_package import make_package, score_package
 from content_control import save_package
 from file_intake import classify, extract_text, ocr_image
 
 SITE_REPO = 'Mbms-1356/forexin-site-'
+
+
+def _compact_image(data):
+    """Create a smaller readable archive copy; OCR still uses the original bytes."""
+    try:
+        from PIL import Image
+        image = Image.open(io.BytesIO(data)).convert('RGB')
+        image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+        out = io.BytesIO()
+        image.save(out, format='JPEG', quality=82, optimize=True, progressive=True)
+        return out.getvalue()
+    except Exception:
+        return data
 
 
 def _result_links(package, media_url=''):
@@ -55,6 +69,7 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
         return True
     category = classify(name, kind)
     media_path = ''
+    archive_data = _compact_image(data) if category == 'image' else data
     if put_binary and category in ('image', 'audio', 'video'):
         digest = hashlib.sha256(data).hexdigest()[:20]
         suffix = Path(name or 'upload.bin').suffix.lower()
@@ -62,13 +77,13 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
             suffix = '.bin'
         media_path = f'media/uploads/{digest}{suffix}'
         try:
-            put_binary(media_path, data, 'Archive original ' + category + ' upload')
+            put_binary(media_path, archive_data, 'Archive compact ' + category + ' upload')
         except Exception:
             media_path = ''
     drive_path = ''
     if drive_upload and category in ('image', 'audio', 'video'):
         suffix = Path(name or 'upload.bin').suffix.lower() or '.bin'
-        drive_result = drive_upload('01_Raw_Uploads/' + hashlib.sha256(data).hexdigest()[:20] + suffix, data, category)
+        drive_result = drive_upload('01_Raw_Uploads/' + hashlib.sha256(data).hexdigest()[:20] + suffix, archive_data, category)
         if drive_result:
             drive_path = drive_result.get('webViewLink') or drive_result.get('id', '')
     if category == 'image':
