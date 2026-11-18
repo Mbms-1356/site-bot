@@ -80,15 +80,15 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
         suffix = Path(name or 'upload.bin').suffix.lower()
         if suffix not in ('.jpg', '.jpeg', '.png', '.webp', '.mp3', '.m4a', '.wav', '.ogg', '.mp4', '.mov', '.mkv', '.webm'):
             suffix = '.bin'
-        media_path = f'media/uploads/{digest}{suffix}'
+        media_path = f'content-control/previews/media/{digest}{suffix}'
         try:
-            put_binary(media_path, archive_data, 'Archive compact ' + category + ' upload')
+            put_binary(media_path, archive_data, 'Store compact review preview ' + category)
         except Exception:
             media_path = ''
     drive_path = ''
     if drive_upload and category in ('image', 'audio', 'video'):
         suffix = Path(name or 'upload.bin').suffix.lower() or '.bin'
-        drive_result = drive_upload('01_Raw_Uploads/' + hashlib.sha256(data).hexdigest()[:20] + suffix, archive_data, category)
+        drive_result = drive_upload('00_Previews/' + hashlib.sha256(data).hexdigest()[:20] + suffix, archive_data, category)
         if drive_result:
             drive_path = drive_result.get('webViewLink') or drive_result.get('id', '')
     if category == 'image':
@@ -113,13 +113,14 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
         package['source']['image_analysis'] = visual_analysis[:8000]
         if media_path:
             package['source']['media_path'] = media_path
-            package['source']['media_url'] = 'https://mbms-1356.github.io/forexin-site-/' + media_path
+            package['source']['preview_path'] = media_path
+            package['source']['preview_url'] = 'https://github.com/' + SITE_REPO + '/blob/main/' + media_path
         if drive_path:
             package['source']['drive_url'] = drive_path
         score_package(package)
         save_package(package, lambda path: gh_text(path), lambda path, value, message: put_json(path, value, message))
         if drive_json:
-            drive_json('05_Articles_SEO/' + package.get('id', 'package') + '.json', package)
+            drive_json('00_Previews/packages/' + package.get('id', 'package') + '.json', package)
         if tg_upload:
             tg_upload('sendPhoto', 'photo', package.get('slug', 'cover') + '.jpg', data, chat_id,
                       '🖼 پیش‌نمایش عکس ورودی — هنوز منتشر نشده است', menu)
@@ -146,14 +147,15 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
     package = make_package(article, '', extracted, extracted)
     if media_path:
         package.setdefault('source', {})['media_path'] = media_path
-        package['source']['media_url'] = 'https://mbms-1356.github.io/forexin-site-/' + media_path
+        package['source']['preview_path'] = media_path
+        package['source']['preview_url'] = 'https://github.com/' + SITE_REPO + '/blob/main/' + media_path
         package['source']['media_type'] = category
     if drive_path:
         package['source']['drive_url'] = drive_path
     score_package(package)
     save_package(package, lambda path: gh_text(path), lambda path, value, message: put_json(path, value, message))
     if drive_json:
-        drive_json('05_Articles_SEO/' + package.get('id', 'package') + '.json', package)
+        drive_json('00_Previews/packages/' + package.get('id', 'package') + '.json', package)
     if make_audio and tg_upload:
         audio_preview = make_audio(article.get('podcast_script', ''))
         if audio_preview:

@@ -33,35 +33,38 @@ def save_package(package: Dict[str, Any], fetch_json, put_json) -> None:
                      'status': package.get('status', 'draft'), 'score': package.get('quality', {}).get('score', 0),
                      'updated_at': package['updated_at']})
     put_json(INDEX_PATH, index[:300], 'Update content control index')
-    archive = _load_list(fetch_json, ARCHIVE_PATH)
-    archive = [item for item in archive if item.get('id') != package_id]
-    archive.insert(0, {
-        'id': package_id, 'slug': package.get('slug'),
-        'title': package.get('article', {}).get('title', ''),
-        'status': package.get('status', 'draft'),
-        'category': package.get('article', {}).get('category', 'آموزش'),
-        'keywords': package.get('article', {}).get('keywords', []),
-        'source': package.get('source', {}),
-        'visuals': package.get('visuals', {}),
-        'platforms': package.get('platforms', {}),
-        'article_path': draft_path(package_id),
-        'updated_at': package['updated_at'],
-    })
-    put_json(ARCHIVE_PATH, archive[:500], 'Update content asset archive')
-    knowledge = _load_list(fetch_json, KNOWLEDGE_PATH)
-    knowledge = [item for item in knowledge if item.get('id') != package_id]
-    article = package.get('article', {})
-    knowledge.insert(0, {
-        'id': package_id, 'title': article.get('title', ''),
-        'category': article.get('category', 'آموزش'),
-        'keywords': article.get('keywords', []),
-        'text': ('\n'.join(str(x) for x in article.get('body', [])) + '\n' + str(article.get('excerpt', '')))[:20000],
-        'source_url': package.get('source', {}).get('url', ''),
-        'status': package.get('status', 'draft'),
-        'safe_for_assistant': package.get('status') in ('approved', 'published'),
-        'updated_at': package['updated_at'],
-    })
-    put_json(KNOWLEDGE_PATH, knowledge[:500], 'Update assistant knowledge index')
+    # Drafts stay only in the draft index. Approved packages are the only
+    # records allowed into the durable asset archive and assistant knowledge.
+    if package.get('status') in ('approved', 'published'):
+        archive = _load_list(fetch_json, ARCHIVE_PATH)
+        archive = [item for item in archive if item.get('id') != package_id]
+        archive.insert(0, {
+            'id': package_id, 'slug': package.get('slug'),
+            'title': package.get('article', {}).get('title', ''),
+            'status': package.get('status'),
+            'category': package.get('article', {}).get('category', 'آموزش'),
+            'keywords': package.get('article', {}).get('keywords', []),
+            'source': package.get('source', {}),
+            'visuals': package.get('visuals', {}),
+            'platforms': package.get('platforms', {}),
+            'article_path': 'articles/' + package.get('slug', package_id) + '.html',
+            'updated_at': package['updated_at'],
+        })
+        put_json(ARCHIVE_PATH, archive[:500], 'Update approved content archive')
+        knowledge = _load_list(fetch_json, KNOWLEDGE_PATH)
+        knowledge = [item for item in knowledge if item.get('id') != package_id]
+        article = package.get('article', {})
+        knowledge.insert(0, {
+            'id': package_id, 'title': article.get('title', ''),
+            'category': article.get('category', 'آموزش'),
+            'keywords': article.get('keywords', []),
+            'text': ('\n'.join(str(x) for x in article.get('body', [])) + '\n' + str(article.get('excerpt', '')))[:20000],
+            'source_url': package.get('source', {}).get('url', ''),
+            'status': package.get('status'),
+            'safe_for_assistant': True,
+            'updated_at': package['updated_at'],
+        })
+        put_json(KNOWLEDGE_PATH, knowledge[:500], 'Update approved assistant knowledge')
 
 
 def _load_list(fetch_json, path: str) -> List[Dict[str, Any]]:

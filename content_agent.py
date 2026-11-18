@@ -132,6 +132,21 @@ def publish_approved_package(package):
     article = dict(package.get('article', {}))
     slug = package.get('slug') or 'forexin-content'
     source_link = package.get('source', {}).get('url', '')
+    preview_path = package.get('source', {}).get('preview_path', '')
+    preview_media = gh_binary(preview_path) if preview_path else None
+    if preview_media:
+        suffix = Path(preview_path).suffix.lower() or '.bin'
+        digest = __import__('hashlib').sha256(preview_media).hexdigest()[:20]
+        approved_path = 'media/approved/' + digest + suffix
+        gh_put(approved_path, preview_media, 'Archive approved media: ' + slug, SITE_REPO, binary=True)
+        package.setdefault('source', {})['media_path'] = approved_path
+        package['source']['media_url'] = 'https://mbms-1356.github.io/forexin-site-/' + approved_path
+        package['source'].pop('preview_path', None)
+        package['source'].pop('preview_url', None)
+        try:
+            drive_archive.upload_bytes('03_Approved_Knowledge/media/' + digest + suffix, preview_media, 'image/jpeg' if suffix in ('.jpg', '.jpeg') else 'application/octet-stream')
+        except Exception:
+            pass
     audio_url = ''
     audio_path = package.get('review', {}).get('preview_audio_path', '')
     audio = gh_binary(audio_path) if audio_path else None
@@ -602,12 +617,12 @@ def handle_post(post):
             package['short_video']['format'] = 'mp4'
             package['short_video']['aspect_ratio'] = '9:16'
     if media and name == 'channel-image.jpg':
-        media_path = 'media/uploads/' + __import__('hashlib').sha256(media).hexdigest()[:20] + '.jpg'
+        media_path = 'content-control/previews/media/' + __import__('hashlib').sha256(media).hexdigest()[:20] + '.jpg'
         compact = compact_image(media)
-        gh_put(media_path, compact, 'Archive compact Base channel image: ' + slug, SITE_REPO, binary=True)
+        gh_put(media_path, compact, 'Store compact Base image preview: ' + slug, SITE_REPO, binary=True)
         package.setdefault('source', {})['type'] = 'channel-image-ocr'
-        package['source']['media_path'] = media_path
-        package['source']['media_url'] = 'https://mbms-1356.github.io/forexin-site-/' + media_path
+        package['source']['preview_path'] = media_path
+        package['source']['preview_url'] = 'https://github.com/' + SITE_REPO + '/blob/main/' + media_path
         package['source']['ocr_text'] = image_text[:12000]
         package['source']['image_analysis'] = image_analysis[:8000]
     score_package(package)
