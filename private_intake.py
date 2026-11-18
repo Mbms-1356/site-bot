@@ -5,6 +5,17 @@ from content_package import make_package, score_package
 from content_control import save_package
 from file_intake import classify, extract_text, ocr_image
 
+SITE_REPO = 'Mbms-1356/forexin-site-'
+
+
+def _result_links(package, media_url=''):
+    package_id = package.get('id', '')
+    draft_url = f'https://github.com/{SITE_REPO}/blob/main/content-control/drafts/{package_id}.json'
+    lines = [f'🔗 پیش‌نویس کامل: {draft_url}']
+    if media_url:
+        lines.append(f'🖼 فایل اصلی عکس: {media_url}')
+    return '\n'.join(lines)
+
 
 def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_text, put_json, tg_send, menu, put_binary=None, analyze_image=None, drive_upload=None, drive_json=None):
     chat_id = msg.get('chat', {}).get('id')
@@ -21,7 +32,7 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
         package = make_package(article, '', text, '')
         score_package(package)
         save_package(package, lambda path: gh_text(path), lambda path, value, message: put_json(path, value, message))
-        tg_send(chat_id, f"✅ متن دریافت شد و پیش‌نویس ساخته شد.\n📊 امتیاز: {package['quality']['score']}", menu)
+        tg_send(chat_id, f"✅ متن دریافت شد و پیش‌نویس ساخته شد.\n📊 امتیاز: {package['quality']['score']}\n\n{_result_links(package)}", menu)
         return True
     name, file_id, kind = '', None, ''
     if msg.get('document'):
@@ -89,7 +100,7 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
         save_package(package, lambda path: gh_text(path), lambda path, value, message: put_json(path, value, message))
         if drive_json:
             drive_json('05_Articles_SEO/' + package.get('id', 'package') + '.json', package)
-        tg_send(chat_id, f"✅ عکس با OCR خوانده شد و پیش‌نویس ساخته شد.\n🔎 متن استخراج‌شده: {len(extracted)} کاراکتر\n📊 امتیاز: {package['quality']['score']}", menu)
+        tg_send(chat_id, f"✅ عکس با OCR خوانده شد و پیش‌نویس ساخته شد.\n🔎 متن استخراج‌شده: {len(extracted)} کاراکتر\n📊 امتیاز: {package['quality']['score']}\n\n{_result_links(package, package.get('source', {}).get('media_url', ''))}", menu)
         return True
     extracted = transcribe(data, name) if category in ('audio', 'video') else extract_text(data, name)
     if not extracted:
@@ -110,5 +121,5 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
     save_package(package, lambda path: gh_text(path), lambda path, value, message: put_json(path, value, message))
     if drive_json:
         drive_json('05_Articles_SEO/' + package.get('id', 'package') + '.json', package)
-    tg_send(chat_id, f"✅ فایل دریافت و پیش‌نویس ساخته شد.\n📄 نوع: {category}\n📊 امتیاز: {package['quality']['score']}", menu)
+    tg_send(chat_id, f"✅ فایل دریافت و پیش‌نویس ساخته شد.\n📄 نوع: {category}\n📊 امتیاز: {package['quality']['score']}\n\n{_result_links(package, package.get('source', {}).get('media_url', ''))}", menu)
     return True
