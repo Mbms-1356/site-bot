@@ -10,6 +10,7 @@ from publishing_orchestrator import build_publish_queue
 from visual_asset_agent import build_asset_jobs
 from analytics_agent import build_report as build_analytics_report
 from github_app_auth import readiness as github_app_readiness, github_token
+from reel_renderer import render_image_reel
 
 TOKEN = os.environ.get('TOKEN_CONTENT_AGENT', '').strip()
 PAT = github_token()
@@ -137,11 +138,15 @@ def draft_keyboard(item, admin=False):
     if not package_id:
         return None
     buttons = [[{'text': '👁 مشاهده', 'callback_data': 'view:' + package_id}]]
+    buttons.append([{'text': '🔗 بازکردن پیش‌نویس',
+                     'url': f'https://github.com/{SITE_REPO}/blob/main/content-control/drafts/{package_id}.json'}])
     if admin:
         buttons.append([
             {'text': '✅ تأیید', 'callback_data': 'approve:' + package_id},
             {'text': '🚫 رد', 'callback_data': 'reject:' + package_id},
         ])
+        buttons.append([{'text': '✏️ اصلاح دستی',
+                         'url': f'https://github.com/{SITE_REPO}/edit/main/content-control/drafts/{package_id}.json'}])
     return {'inline_keyboard': buttons}
 
 
@@ -373,7 +378,7 @@ def vision_analyze(data, name='image.jpg'):
         mime = 'image/png' if name.lower().endswith('.png') else 'image/jpeg'
         payload = {'model': 'openai/gpt-4o-mini', 'messages': [{
             'role': 'user', 'content': [
-                {'type': 'text', 'text': 'این تصویر آموزشی فارکس/LIT را به فارسی تحلیل کن. فقط مشاهدات قابل‌اعتماد درباره متن، نمودار، جدول و ساختار آموزشی را بنویس؛ سیگنال خرید/فروش یا پیش‌بینی قطعی نده.'},
+                {'type': 'text', 'text': 'این تصویر را با دقت و فقط بر اساس چیزهایی که واقعاً دیده می‌شود بررسی کن. پاسخ فارسی را دقیقاً با این بخش‌ها بده: «متن قابل‌خواندن تصویر»، «مشاهدات قطعی درباره چیدمان یا نمودار»، «بخش‌های ناخوانا یا نامطمئن». متن را حدس نزن و اگر خوانا نیست بنویس ناخوانا. درباره بروکر، سرمایه، سود، نهادها یا پیام آموزشی چیزی اضافه نکن مگر اینکه در خود تصویر به‌وضوح دیده شود. هیچ سیگنال خرید/فروش یا پیش‌بینی قطعی نده.'},
                 {'type': 'image_url', 'image_url': {'url': 'data:' + mime + ';base64,' + base64.b64encode(data).decode()}}
             ]}], 'temperature': 0.2, 'max_tokens': 900}
         raw = http('https://openrouter.ai/api/v1/chat/completions', json.dumps(payload).encode(), {
@@ -386,7 +391,7 @@ def vision_analyze(data, name='image.jpg'):
 def make_article(source, transcript):
     prompt = '''از محتوای آموزشی زیر فقط JSON معتبر تولید کن. موضوع فارکس و LIT است. ادعای سود قطعی، سیگنال خرید/فروش و وعده درآمد ممنوع است. پاسخ فارسی باشد.
 فیلدها: slug انگلیسی کوتاه، title فارسی، seo_title حداکثر 60 کاراکتر، description حداکثر 155 کاراکتر، keywords آرایه 5 تا 8تایی، body آرایه‌ای از 5 تا 8 پاراگراف آموزشی، excerpt یک پاراگراف، podcast_script متن روان 2 تا 4 دقیقه‌ای، category.
-منبع را تحریف نکن و اگر نکته‌ای نامطمئن است آن را قطعی ننویس.
+منبع را تحریف نکن و اگر نکته‌ای نامطمئن است آن را قطعی ننویس. podcast_script باید برای خواندن انسانی باشد: جمله‌های کوتاه، لحن گفتاری محترمانه، مکث طبیعی با ویرگول و نقطه، بدون تیتر، بولت، ایموجی، Markdown یا توضیح داخل پرانتز. متن صوتی نباید چیزی بیشتر از منبع ادعا کند.
 CONTENT:
 ''' + source[:12000] + '\nTRANSCRIPT:\n' + transcript[:30000]
     if not OPENROUTER: return None
@@ -421,6 +426,10 @@ def make_audio(script):
     if not script: return None
     try:
         import asyncio, edge_tts
+        script = re.sub(r'[*_#`]+', '', str(script))
+        script = re.sub(r'\[[^\]]*\]', '', script)
+        script = re.sub(r'\([^)]*\)', '', script)
+        script = re.sub(r'\s+', ' ', script).strip()
         path = tempfile.mktemp(suffix='.mp3')
         async def go():
             await edge_tts.Communicate(script[:12000], 'fa-IR-DilaraNeural').save(path)
@@ -435,7 +444,7 @@ def handle_post(post):
     username = (chat.get('username') or '').lower()
     if username not in BASE_NAMES: return 'ignored-channel'
     caption = post.get('caption', '') or post.get('text', '')
-    media = None; name = 'media.bin'; image_text = ''
+    media = None; name = 'media.bin'; image_text = ''; image_analysis = ''
     if post.get('video'):
         media = file_bytes(post['video']['file_id']); name = 'video.mp4'
     elif post.get('audio'):
@@ -477,6 +486,19 @@ def handle_post(post):
     items.insert(0, {'slug': slug, 'title': article.get('title',''), 'description': article.get('description',''), 'url': 'articles/' + slug + '.html', 'audio': audio_url, 'source': source_link, 'published_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})
     gh_put('articles/index.json', json.dumps(items[:200], ensure_ascii=False, indent=2), 'Update article index')
     package = make_package(article, source_link, source, transcript or image_text, audio_url)
+    reel_url = ''
+    if media and name == 'channel-image.jpg' and audio:
+        reel = render_image_reel(media, audio)
+        if reel:
+            reel_path = 'reels/' + slug + '.mp4'
+            gh_put(reel_path, reel, 'Render educational reel: ' + slug, SITE_REPO, binary=True)
+            reel_url = 'https://mbms-1356.github.io/forexin-site-/' + reel_path
+            package.setdefault('short_video', {})['status'] = 'rendered'
+            package['short_video']['url'] = reel_url
+            package['short_video']['format'] = 'mp4'
+            package['short_video']['aspect_ratio'] = '9:16'
+    if reel_url:
+        article['reel_url'] = reel_url
     if media and name == 'channel-image.jpg':
         media_path = 'media/uploads/' + __import__('hashlib').sha256(media).hexdigest()[:20] + '.jpg'
         gh_put(media_path, media, 'Archive Base channel image: ' + slug, SITE_REPO, binary=True)
@@ -527,7 +549,10 @@ def main():
                 else:
                     rows = index[:8]
                     if rows:
-                        lines = ['📝 آخرین پیش‌نویس‌ها:'] + [f"• {x.get('title','بدون عنوان')} | {x.get('status','draft')} | امتیاز {x.get('score',0)}" for x in rows]
+                        lines = ['📝 آخرین پیش‌نویس‌ها:'] + [
+                            f"• {x.get('title','بدون عنوان')} | {x.get('status','draft')} | امتیاز {x.get('score',0)}\n"
+                            f"🔗 https://github.com/{SITE_REPO}/blob/main/content-control/drafts/{x.get('id','')}.json"
+                            for x in rows]
                         tg_send(msg['chat']['id'], '\n'.join(lines))
                     else:
                         tg_send(msg['chat']['id'], '📝 هنوز بسته محتوایی ثبت نشده است.')
@@ -575,7 +600,8 @@ def main():
                 else:
                     tg_send(chat_id, '📝 آخرین پیش‌نویس‌ها:', MAIN_MENU)
                     for row in rows:
-                        text_out = f"• {row.get('title','بدون عنوان')}\nوضعیت: {row.get('status','draft')} | امتیاز: {row.get('score',0)}"
+                        text_out = (f"• {row.get('title','بدون عنوان')}\nوضعیت: {row.get('status','draft')} | امتیاز: {row.get('score',0)}\n"
+                                    f"🔗 https://github.com/{SITE_REPO}/blob/main/content-control/drafts/{row.get('id','')}.json")
                         tg_send(chat_id, text_out, draft_keyboard(row, is_content_admin(chat_id)))
             elif data.startswith(('view:', 'approve:', 'reject:')):
                 action, package_id = data.split(':', 1)
@@ -593,7 +619,8 @@ def main():
                                 'کلمات کلیدی: ' + ', '.join(map(str, article.get('keywords', []))) + '\n\n' +
                                 'وضعیت: ' + str(package.get('status', 'draft')) + '\n' +
                                 'کاورها: ' + str(len(package.get('visuals', {}).get('assets', {}))) + ' قالب آماده تولید\n' +
-                                'وضعیت کاور: ' + str(package.get('visuals', {}).get('status', 'pending')))
+                                'وضعیت کاور: ' + str(package.get('visuals', {}).get('status', 'pending')) + '\n\n' +
+                                f"🔗 فایل کامل: https://github.com/{SITE_REPO}/blob/main/content-control/drafts/{package_id}.json")
                     tg_send(chat_id, text_out[:3900], draft_keyboard({'id': package_id, 'status': package.get('status')}, is_content_admin(chat_id)))
                 elif not is_content_admin(chat_id):
                     tg_send(chat_id, '⛔ این عملیات فقط برای مدیر مرکز محتوا فعال است.', MAIN_MENU)
