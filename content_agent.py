@@ -297,6 +297,19 @@ def state_save(st):
     gh_put(STATE_PATH, json.dumps(st, ensure_ascii=False, indent=2), 'Update content agent state', SELF_REPO)
 
 
+def update_priority(update):
+    """Handle commands and approvals before expensive media/LLM work."""
+    msg = update.get('message') or {}
+    text = (msg.get('text') or '').strip().lower()
+    if text in ('/start', '/help', '/status', '/control', '/drafts'):
+        return 0
+    if update.get('callback_query'):
+        return 1
+    if msg.get('chat', {}).get('type') == 'private' and msg.get('text'):
+        return 2
+    return 3
+
+
 def record_failure(st, update_id, error):
     failures = st.setdefault('failures', [])
     failures.insert(0, {'update_id': str(update_id), 'error': str(error)[:300], 'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'status': 'retry_pending'})
@@ -669,7 +682,7 @@ def main():
         print('telegram-poll-failed:', str(exc)[:200])
         return
     results = []
-    for u in updates:
+    for u in sorted(updates, key=update_priority):
         st['offset'] = max(int(st.get('offset', 0)), int(u.get('update_id', 0)))
         msg = u.get('message') or {}
         if msg and msg.get('chat', {}).get('type') == 'private':

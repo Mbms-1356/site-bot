@@ -32,8 +32,8 @@ jobs:
       - name: Install media tools
         run: |
           if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v tesseract >/dev/null 2>&1; then
-            sudo apt-get update -y >/dev/null 2>&1
-            sudo apt-get install -y ffmpeg tesseract-ocr tesseract-ocr-fas >/dev/null 2>&1
+            timeout 120 sudo apt-get update -y >/dev/null 2>&1 || echo 'apt update timed out; continuing with available tools'
+            timeout 120 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg tesseract-ocr tesseract-ocr-fas >/dev/null 2>&1 || echo 'media tools unavailable; OCR/reel steps will degrade gracefully'
           fi
           python3 -m pip install --quiet edge-tts pypdf Pillow PyJWT cryptography google-api-python-client google-auth
       - name: Process Base channel content
