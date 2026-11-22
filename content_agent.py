@@ -224,8 +224,9 @@ MAIN_MENU = {'inline_keyboard': [
     [{'text': '📋 دستورات سریع', 'callback_data': 'commands'}],
     [{'text': '📊 وضعیت کارخانه', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس‌ها', 'callback_data': 'drafts'}],
     [{'text': '📚 راهنمای کار', 'callback_data': 'help'}, {'text': '🔄 بررسی کانال Base', 'callback_data': 'status'}],
-    [{'text': '📥 ارسال محتوای جدید', 'callback_data': 'intake'}, {'text': '📄 PDF / Word / متن', 'callback_data': 'document'}],
-    [{'text': '🎙 صوت / ویدئو', 'callback_data': 'media'}, {'text': '🖼 عکس آموزشی', 'callback_data': 'image'}],
+    [{'text': '📝 ارسال متن', 'callback_data': 'intake-text'}, {'text': '🖼 ارسال عکس', 'callback_data': 'intake-image'}],
+    [{'text': '🎬 ارسال فیلم', 'callback_data': 'intake-video'}, {'text': '🎙 ارسال صوت', 'callback_data': 'intake-audio'}],
+    [{'text': '📄 ارسال PDF / Word', 'callback_data': 'intake-document'}],
 ]}
 
 QUALITY_MENU = {'inline_keyboard': [
@@ -256,8 +257,9 @@ CONTROL_MENU = {'inline_keyboard': [
 COMMANDS_MENU = {'inline_keyboard': [
     [{'text': '🚀 شروع', 'callback_data': 'main'}, {'text': '🔄 وضعیت', 'callback_data': 'status'}],
     [{'text': '📊 کنترل', 'callback_data': 'control'}, {'text': '📝 پیش‌نویس‌ها', 'callback_data': 'drafts'}],
-    [{'text': '📥 ارسال محتوا', 'callback_data': 'intake'}, {'text': '🖼 ارسال عکس', 'callback_data': 'image'}],
-    [{'text': '🎙 ارسال صوت/ویدئو', 'callback_data': 'media'}, {'text': '📄 ارسال PDF/Word', 'callback_data': 'document'}],
+    [{'text': '📝 ارسال متن', 'callback_data': 'intake-text'}, {'text': '🖼 ارسال عکس', 'callback_data': 'intake-image'}],
+    [{'text': '🎬 ارسال فیلم', 'callback_data': 'intake-video'}, {'text': '🎙 ارسال صوت', 'callback_data': 'intake-audio'}],
+    [{'text': '📄 ارسال PDF / Word', 'callback_data': 'intake-document'}],
     [{'text': '🧭 مرکز عملیات', 'callback_data': 'hub'}, {'text': 'ℹ️ راهنما', 'callback_data': 'help'}],
 ]}
 
@@ -881,8 +883,16 @@ def main():
                     report = github_app_readiness()
                     put_json('content-control/github-app-readiness.json', report, 'Update GitHub App readiness', SITE_REPO)
                     tg_send(chat_id, f"🔐 آمادگی GitHub App\n\nوضعیت: {'آماده' if report['ready'] else 'نیازمند تنظیم'}\nAPP ID: {'✅' if report['checks']['GITHUB_APP_ID'] else '❌'}\nPrivate Key: {'✅' if report['checks']['GITHUB_APP_PRIVATE_KEY'] else '❌'}\nInstallation ID: {'✅' if report['checks']['GITHUB_APP_INSTALLATION_ID'] else '❌'}\n\n{report['note']}", CONTROL_MENU)
-            elif data in ('intake', 'document', 'media', 'image'):
-                tg_send(chat_id, '📥 فایل یا متن آموزشی را همین‌جا ارسال کنید. پس از دریافت، پیش‌نویس مقاله، پادکست، ریلز و نسخه‌های پلتفرمی ساخته می‌شود.', MAIN_MENU)
+            elif data in ('intake', 'document', 'media', 'image', 'intake-text', 'intake-image', 'intake-video', 'intake-audio', 'intake-document'):
+                prompts = {
+                    'intake-text': '📝 متن آموزشی را همین‌جا به‌صورت پیام ارسال کنید.',
+                    'intake-image': '🖼 عکس آموزشی را همین‌جا ارسال کنید؛ نوشته داخل عکس هم خوانده و تحلیل می‌شود.',
+                    'intake-video': '🎬 فیلم آموزشی را همین‌جا ارسال کنید؛ گفتار آن به متن تبدیل می‌شود.',
+                    'intake-audio': '🎙 فایل صوتی یا Voice را همین‌جا ارسال کنید؛ متن، مقاله، پادکست و کپشن ساخته می‌شود.',
+                    'intake-document': '📄 فایل PDF یا Word را همین‌جا ارسال کنید تا متن آن استخراج و به بسته محتوا تبدیل شود.',
+                }
+                prompt = prompts.get(data, '📥 عکس، فیلم، صوت، PDF، Word یا متن آموزشی را همین‌جا ارسال کنید.')
+                tg_send(chat_id, prompt + '\n\n⏳ پس از دریافت، مقاله، قلاب، کپشن پلتفرم‌ها، هشتگ، صوت و در صورت امکان ریلز در همین ربات برای بررسی ارسال می‌شود.', MAIN_MENU)
             elif data in ('research', 'calendar'):
                 index = load_index(lambda path: gh_text(path, SITE_REPO))
                 if data == 'research':
