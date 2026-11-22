@@ -595,8 +595,9 @@ def vision_analyze(data, name='image.jpg'):
 
 def make_article(source, transcript):
     prompt = '''از محتوای آموزشی زیر فقط JSON معتبر تولید کن. موضوع فارکس و LIT است. ادعای سود قطعی، سیگنال خرید/فروش و وعده درآمد ممنوع است. پاسخ فارسی باشد.
-فیلدها: slug انگلیسی کوتاه، title فارسی، seo_title حداکثر 60 کاراکتر، description حداکثر 155 کاراکتر، keywords آرایه 5 تا 8تایی، body آرایه‌ای از 5 تا 8 پاراگراف آموزشی، excerpt یک پاراگراف، podcast_script متن روان 2 تا 4 دقیقه‌ای، category.
+فیلدها: slug انگلیسی کوتاه، title فارسی، seo_title حداکثر 60 کاراکتر، description حداکثر 155 کاراکتر، keywords آرایه 5 تا 8تایی، body آرایه‌ای از 5 تا 8 پاراگراف آموزشی، excerpt یک پاراگراف، podcast_script متن روان 2 تا 4 دقیقه‌ای، reel_script متن مستقل و کامل 90 تا 110 کلمه‌ای برای ریلز دقیقاً 45 ثانیه‌ای، category.
 منبع را تحریف نکن و اگر نکته‌ای نامطمئن است آن را قطعی ننویس. podcast_script باید برای خواندن انسانی باشد: جمله‌های کوتاه، لحن گفتاری محترمانه، مکث طبیعی با ویرگول و نقطه، بدون تیتر، بولت، ایموجی، Markdown یا توضیح داخل پرانتز. متن صوتی نباید چیزی بیشتر از منبع ادعا کند.
+reel_script باید روایتی مستقل و کامل از همان موضوع باشد؛ با شروع قلاب‌دار، توضیح روشن، جمع‌بندی و دعوت غیرتحمیلی به مطالعه ادامه مطلب. ادعای سود قطعی یا سیگنال نداشته باشد.
 CONTENT:
 ''' + source[:12000] + '\nTRANSCRIPT:\n' + transcript[:30000]
     if not OPENROUTER: return None
@@ -675,6 +676,7 @@ def handle_post(post):
     if not article: return 'generation-failed'
     slug = slugify(article.get('slug'))
     audio = make_audio(article.get('podcast_script', ''))
+    reel_audio = make_audio(article.get('reel_script') or article.get('podcast_script', ''))
     # Generated assets stay in a private review area until the admin approves.
     audio_url = ''
     preview_audio_path = ''
@@ -687,8 +689,8 @@ def handle_post(post):
     package['review']['preview_audio_path'] = preview_audio_path
     reel_url = ''
     reel = None
-    if media and name == 'channel-image.jpg' and audio:
-        reel = render_image_reel(media, audio, article.get('podcast_script', ''))
+    if media and name == 'channel-image.jpg' and reel_audio:
+        reel = render_image_reel(media, reel_audio, article.get('reel_script') or article.get('podcast_script', ''))
         if reel:
             reel_path = 'content-control/previews/' + slug + '.mp4'
             gh_put(reel_path, reel, 'Render educational reel: ' + slug, SITE_REPO, binary=True)

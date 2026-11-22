@@ -42,6 +42,7 @@ def make_package(article: Dict[str, Any], source_link: str, source_text: str,
     keywords = article.get('keywords') or []
     body = article.get('body') or []
     script = article.get('podcast_script') or excerpt
+    reel_script = article.get('reel_script') or excerpt
     description = article.get('description') or excerpt[:155]
     seo_title = (article.get('seo_title') or title)[:60]
     seo_description = description[:155]
@@ -54,9 +55,9 @@ def make_package(article: Dict[str, Any], source_link: str, source_text: str,
                      'بدون وعده سود، بدون سیگنال خرید یا فروش، بدون لوگوی ساختگی، فضای خالی امن برای تیتر فارسی؛ '
                      'در صورت وجود لوگوی رسمی، همان لوگو را در گوشه امن کاور استفاده کن.')
     hooks = [
-        f'چرا بیشتر معامله‌گران در موضوع «{title}» اشتباه می‌کنند؟',
-        f'قبل از تصمیم‌گیری درباره «{title}»، این نکته را بررسی کنید.',
-        f'اگر با «{title}» مشکل دارید، این آموزش کوتاه را ببینید.',
+        f'بیشتر معامله‌گران در «{title}» دقیقاً همین اشتباه را تکرار می‌کنند؛ دلیلش چیست؟',
+        f'قبل از هر تصمیم درباره «{title}»، این نکته مهم را از دست ندهید.',
+        f'اگر نتیجه تحلیل شما با انتظار‌تان فرق دارد، این بخش از «{title}» را ببینید.',
     ]
     return {
         'schema_version': '1.1',
@@ -75,7 +76,7 @@ def make_package(article: Dict[str, Any], source_link: str, source_text: str,
                 'image_alt': 'تصویر آموزشی درباره ' + title,
                 'hashtags': tags},
         'podcast': {'script': script, 'audio_url': audio_url},
-        'short_video': {'hooks': hooks, 'script': script[:1800], 'duration_seconds': 45,
+        'short_video': {'hooks': hooks, 'script': reel_script[:1200], 'duration_seconds': 45,
                         'caption_overlay': title, 'cta': cta},
         'visuals': {
             'status': 'draft_only',

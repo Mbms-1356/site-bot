@@ -134,7 +134,8 @@ def process_private_upload(msg, state, file_bytes, transcribe, make_article, gh_
                     tg_upload('sendAudio', 'audio', package.get('slug', 'podcast') + '.mp3', audio_preview, chat_id,
                               '🔊 پیش‌نمایش صوتی مقاله — هنوز منتشر نشده است', menu)
                     if render_reel:
-                        reel_preview = render_reel(data, audio_preview, article.get('podcast_script', ''))
+                        reel_audio = make_audio(article.get('reel_script') or article.get('podcast_script', ''))
+                        reel_preview = render_reel(data, reel_audio, article.get('reel_script') or article.get('podcast_script', ''))
                         if reel_preview:
                             tg_upload('sendVideo', 'video', package.get('slug', 'reel') + '.mp4', reel_preview, chat_id,
                               '🎬 پیش‌نمایش ریلز ۹:۱۶ — هنوز منتشر نشده است', menu)
