@@ -18,6 +18,11 @@ PAT = github_token()
 GROQ = os.environ.get('GROQ_KEY', '').strip()
 OPENROUTER = os.environ.get('OPENROUTER_KEY', '').strip()
 CONTENT_ADMIN_CHAT_ID = os.environ.get('CONTENT_ADMIN_CHAT_ID', '').strip()
+if not CONTENT_ADMIN_CHAT_ID:
+    try:
+        CONTENT_ADMIN_CHAT_ID = str(json.loads(Path('admin.json').read_text()).get('id', '')).strip()
+    except Exception:
+        CONTENT_ADMIN_CHAT_ID = ''
 SITE_REPO = 'Mbms-1356/forexin-site-'
 SELF_REPO = os.environ.get('GITHUB_REPOSITORY', 'Mbms-1356/site-bot')
 BASE_NAMES = {'forexin_turkaslani_base', 'forexinturkaslanibase'}
