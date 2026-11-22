@@ -95,7 +95,7 @@ def compact_image(data, max_side=1600, quality=82):
         return data
 
 
-def preview_package(chat_id, package, article, audio=None, reel=None, image=None):
+def preview_package(chat_id, package, article, audio=None, reel=None, image=None, send_assets=True):
     """Send every generated asset to the admin before any public publication."""
     if not CONTENT_ADMIN_CHAT_ID or str(chat_id) != str(CONTENT_ADMIN_CHAT_ID):
         return
@@ -105,7 +105,7 @@ def preview_package(chat_id, package, article, audio=None, reel=None, image=None
     caption = ('🔍 پیش‌نمایش برای بررسی انسانی\n\n' + title + '\n\n' +
                str(article.get('description', '')) +
                '\n\n⚠️ هنوز منتشر نشده است. پس از بررسی، دکمه «تأیید» را بزنید.')
-    if image:
+    if image and send_assets:
         tg_upload('sendPhoto', 'photo', package.get('slug', 'cover') + '.jpg', image, chat_id, caption, keyboard)
 
     # Everything needed for review/copying is delivered in Telegram; GitHub is
@@ -147,10 +147,10 @@ def preview_package(chat_id, package, article, audio=None, reel=None, image=None
                   '', '⚠️ این بسته هنوز منتشر نشده است و پس از تأیید انسانی قابل انتشار است.',
                   '✅ تأیید | 🚫 رد | ✏️ اصلاح دستی'])
     send_long('\n'.join(lines), keyboard)
-    if audio:
+    if audio and send_assets:
         tg_upload('sendAudio', 'audio', package.get('slug', 'podcast') + '.mp3', audio, chat_id,
                   '🔊 پیش‌نمایش صوت فارسی — هنوز منتشر نشده است', keyboard)
-    if reel:
+    if reel and send_assets:
         tg_upload('sendVideo', 'video', package.get('slug', 'reel') + '.mp4', reel, chat_id,
                   '🎬 پیش‌نمایش ریلز ۹:۱۶ — هنوز منتشر نشده است', keyboard)
 
@@ -761,7 +761,7 @@ def main():
                                       lambda path, data, category: drive_archive.upload_bytes(path, data, {
                                           'image': 'image/jpeg', 'audio': 'audio/mpeg', 'video': 'video/mp4'
                                       }.get(category, 'application/octet-stream')),
-                                      drive_archive.upload_json, make_audio, render_image_reel, tg_upload)
+                                      drive_archive.upload_json, make_audio, render_image_reel, tg_upload, preview_package)
             except Exception as exc:
                 record_failure(st, u.get('update_id'), exc)
                 tg_send(msg['chat']['id'], '⚠️ پردازش این فایل ناموفق شد و خطا برای بررسی ثبت شد. لطفاً دوباره ارسال کنید.', MAIN_MENU)
