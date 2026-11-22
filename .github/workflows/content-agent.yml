@@ -37,4 +37,10 @@ jobs:
           fi
           python3 -m pip install --quiet edge-tts pypdf Pillow PyJWT cryptography google-api-python-client google-auth
       - name: Process Base channel content
-        run: python3 content_agent.py
+        run: |
+          set +e
+          timeout 240 python3 content_agent.py
+          code=$?
+          if [ "$code" -ne 0 ] && [ "$code" -ne 124 ]; then
+            exit "$code"
+          fi
