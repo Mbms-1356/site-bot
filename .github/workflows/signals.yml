@@ -1,7 +1,7 @@
 name: signals
 on:
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 concurrency:
   group: signals-single
@@ -20,4 +20,10 @@ jobs:
       - name: deps
         run: pip install pyTelegramBotAPI yt-dlp requests edge-tts
       - name: run bot
-        run: python3 bot.py
+        run: |
+          set +e
+          timeout 240 python3 bot.py
+          code=$?
+          if [ "$code" -ne 0 ] && [ "$code" -ne 124 ]; then
+            exit "$code"
+          fi
