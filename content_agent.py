@@ -11,6 +11,7 @@ from visual_asset_agent import build_asset_jobs
 from analytics_agent import build_report as build_analytics_report
 from github_app_auth import readiness as github_app_readiness, github_token
 from reel_renderer import render_image_reel
+from brand_config import brand_links
 
 TOKEN = os.environ.get('TOKEN_CONTENT_AGENT', '').strip()
 PAT = github_token()
@@ -106,9 +107,46 @@ def preview_package(chat_id, package, article, audio=None, reel=None, image=None
                '\n\n⚠️ هنوز منتشر نشده است. پس از بررسی، دکمه «تأیید» را بزنید.')
     if image:
         tg_upload('sendPhoto', 'photo', package.get('slug', 'cover') + '.jpg', image, chat_id, caption, keyboard)
-    tg_send(chat_id, ('📰 مقاله و بسته محتوایی آماده بررسی است.\n\n' +
-                       'پیش‌نویس: ' + package_id + '\n' +
-                       '✅ تأیید = اجازه انتشار\n🚫 رد = عدم انتشار\n✏️ اصلاح دستی = ویرایش فایل JSON'), keyboard)
+
+    # Everything needed for review/copying is delivered in Telegram; GitHub is
+    # only the behind-the-scenes archive and recovery store.
+    def send_long(text, first_keyboard=None):
+        text = str(text or '')
+        if not text:
+            return
+        chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)]
+        for i, chunk in enumerate(chunks):
+            tg_send(chat_id, chunk, first_keyboard if i == 0 else None)
+
+    body = article.get('body') or []
+    body_text = '\n\n'.join(
+        ('• ' + str(x.get('heading', '')) + '\n' + str(x.get('content', '')))
+        if isinstance(x, dict) else str(x) for x in body
+    )
+    short_video = package.get('short_video', {})
+    platforms = package.get('platforms', {})
+    lines = [
+        '📰 بسته کامل آماده بررسی در تلگرام',
+        '', '🆔 پیش‌نویس: ' + package_id,
+        '📌 عنوان: ' + title,
+        '', '📝 توضیح کوتاه:', str(article.get('description', '')),
+        '', '📚 متن مقاله:', body_text or str(article.get('excerpt', '')),
+        '', '🎯 قلاب‌های پیشنهادی:',
+    ]
+    lines.extend('• ' + str(x) for x in short_video.get('hooks', []))
+    lines.extend(['', '🎬 متن ریلز:', str(short_video.get('script', '')),
+                  '', '📣 کپشن‌ها و خروجی پلتفرمی:'])
+    labels = {'instagram': 'اینستاگرام', 'telegram': 'تلگرام', 'whatsapp': 'واتساپ',
+              'tiktok': 'تیک‌تاک', 'youtube': 'یوتیوب', 'linkedin': 'لینکدین', 'x': 'ایکس'}
+    for key, label in labels.items():
+        item = platforms.get(key, {})
+        text = item.get('caption') or item.get('text') or item.get('description') or ''
+        tags = item.get('hashtags') or item.get('tags') or []
+        lines.extend(['', '🔹 ' + label + ':', str(text), 'هشتگ‌ها: ' + ' '.join(map(str, tags))])
+    lines.extend(['', '🔗 لینک‌های رسمی:', brand_links(),
+                  '', '⚠️ این بسته هنوز منتشر نشده است و پس از تأیید انسانی قابل انتشار است.',
+                  '✅ تأیید | 🚫 رد | ✏️ اصلاح دستی'])
+    send_long('\n'.join(lines), keyboard)
     if audio:
         tg_upload('sendAudio', 'audio', package.get('slug', 'podcast') + '.mp3', audio, chat_id,
                   '🔊 پیش‌نمایش صوت فارسی — هنوز منتشر نشده است', keyboard)
